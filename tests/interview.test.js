@@ -68,6 +68,20 @@ test('error messages are friendly and never expose codes or secrets', () => {
   assert.equal(Core.cleanCode(' 12-34 56 789'), '123456');
 });
 
+test('page colours: every tint is a variation of the company colour and stays readable', () => {
+  for (const color of ['#3556c8', '#d2f37a', '#c2410c', '#ffffff', '#000000', '#315f4a', '#ffd400']) {
+    const tokens = Core.accentTokens(color);
+    assert.equal(tokens.accent, color);
+    assert.match(tokens.soft + tokens.mid + tokens.line + tokens.ink, /^(#[0-9a-f]{6}){4}$/);
+    assert.ok(Core.contrastRatio(tokens.ink, tokens.soft) >= 4.5, color + ': ink on the soft tint');
+    assert.ok(Core.contrastRatio(tokens.onAccent, tokens.accent) >= 4.5, color + ': text on the brand colour');
+  }
+  assert.equal(Core.accentTokens('green'), null);
+  assert.equal(Core.accentTokens(null), null);
+  assert.equal(Core.mixHex('#000000', '#ffffff', 0.5), '#808080');
+  assert.equal(Core.TEST_MAX_SECONDS, 60);
+});
+
 test('chat text is escaped', () => {
   assert.equal(Core.escapeHtml('<img src=x onerror="a">'), '&lt;img src=x onerror=&quot;a&quot;&gt;');
 });
@@ -90,6 +104,11 @@ test('interview page: files, order of scripts, no storage of audio, leave handli
   assert.match(js, /The AI does not determine who passes or fails/);
   assert.match(js, /If you leave or refresh this page after the first question, the interview is cancelled/);
   assert.match(js, /Tell me about your career so far/);
+  assert.match(js, /accentTokens/);
+  assert.match(js, /TEST_MAX_SECONDS/, 'the microphone test is limited to one minute');
+  assert.match(js, /id="wave"/, 'there is a sound wave while recording');
+  assert.ok(js.includes("addDivider('The interview starts now')"), 'the interview continues the same chat');
+  assert.ok(!js.includes("list.innerHTML = ''"), 'starting the interview never clears the conversation');
   assert.doesNotMatch(js, /action: 'answer'[\s\S]{0,400}localStorage/);
 });
 

@@ -1,7 +1,7 @@
 // Pure rules of the candidate interview (state machine, timer, impression). No Deno or network access: tested in Node.
 
 export const ANSWER_SECONDS = 180; // 3 minutes per answer (owner decision)
-export const GRACE_SECONDS = 20; // slack for the network when checking the timer on the server
+export const GRACE_SECONDS = 120; // after the 3 minutes, a recording the timer cut short can still be listened to and sent for this long
 export const ABANDON_AFTER_SECONDS = 90; // no sign of life for this long = the candidate left (also in witcher_sweep)
 export const CODE_MAX_ATTEMPTS = 5;
 export const CODE_LOCK_SECONDS = 15 * 60;
@@ -35,7 +35,7 @@ export function secondsLeft(stepStartedAt: string | null, now: Date): number {
   return Math.max(0, Math.min(ANSWER_SECONDS, Math.ceil(ANSWER_SECONDS - elapsed)));
 }
 
-/** A recorded answer is accepted until the limit plus a small network allowance. Skipping is always allowed. */
+/** A recorded answer is accepted until the limit plus the grace time (the person may be listening to it). Skipping is always allowed. */
 export function answerAllowed(stepStartedAt: string | null, now: Date): boolean {
   if (!stepStartedAt) return false;
   return (now.getTime() - Date.parse(stepStartedAt)) / 1000 <= ANSWER_SECONDS + GRACE_SECONDS;

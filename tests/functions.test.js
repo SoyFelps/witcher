@@ -119,6 +119,7 @@ test('the 3-minute timer is checked on the server with a small allowance', async
   const start = '2026-10-28T12:00:00.000Z';
   const at = seconds => new Date(Date.parse(start) + seconds * 1000);
   assert.equal(ANSWER_SECONDS, 180);
+  assert.equal(GRACE_SECONDS, 120, 'a recording cut by the timer can still be sent for two minutes');
   assert.equal(secondsLeft(start, at(0)), 180);
   assert.equal(secondsLeft(start, at(60)), 120);
   assert.equal(secondsLeft(start, at(999)), 0);

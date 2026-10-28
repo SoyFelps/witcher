@@ -37,7 +37,7 @@
 
   // ---------------------------------------------------------------------------------------------- microphone
   const Mic = {
-    stream: null, context: null, analyser: null, frame: 0,
+    stream: null, context: null, analyser: null, frame: 0, level: 0,
     async open() {
       if (this.stream && this.stream.getTracks().some(track => track.readyState === 'live')) return;
       const audio = S.deviceId ? { deviceId: { exact: S.deviceId } } : true;
@@ -69,6 +69,7 @@
           this.analyser.getByteTimeDomainData(data);
           let peak = 0;
           for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
+          this.level = Math.min(1, peak / 64);
           const bar = document.getElementById('meter');
           if (bar) bar.style.width = `${Math.min(100, Math.round(peak / 64 * 100))}%`;
           this.frame = requestAnimationFrame(draw);
@@ -76,6 +77,40 @@
         draw();
       } catch (error) { /* the level bar is only a nicety */ }
     },
+  };
+
+  // A generic sound wave while recording: bars rise with the voice and stay flat in silence (it is only feedback).
+  const Wave = {
+    frame: 0, levels: [], last: 0,
+    start(canvas) {
+      this.stop();
+      if (!canvas || !canvas.getContext) return;
+      const ratio = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth || 240, height = canvas.clientHeight || 44;
+      canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(ratio, ratio);
+      const color = getComputedStyle(canvas).color;
+      const barWidth = 3, gap = 3, count = Math.max(10, Math.floor(width / (barWidth + gap)));
+      this.levels = new Array(count).fill(0);
+      const draw = (now) => {
+        if (now - this.last > 55) {
+          this.last = now;
+          const raw = Mic.level;
+          this.levels.push(raw < 0.06 ? 0 : Math.min(1, (raw - 0.06) / 0.7)); // a noise gate keeps silence flat
+          this.levels.shift();
+        }
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = color;
+        this.levels.forEach((level, index) => {
+          const barHeight = Math.max(3, level * height);
+          ctx.fillRect(index * (barWidth + gap), (height - barHeight) / 2, barWidth, barHeight);
+        });
+        this.frame = requestAnimationFrame(draw);
+      };
+      this.frame = requestAnimationFrame(draw);
+    },
+    stop() { cancelAnimationFrame(this.frame); this.frame = 0; },
   };
 
   function micErrorText(error) {
@@ -109,9 +144,14 @@
 
   function applyBranding() {
     const b = S.branding;
-    const color = b && Core.isValidColor(b.color) ? b.color : '';
+    const tokens = Core.accentTokens(b && b.color);
     const style = document.documentElement.style;
-    if (color) { style.setProperty('--accent', color); style.setProperty('--on-accent', Core.contrastText(color)); }
+    if (tokens) {
+      // Everything on the page that is tinted comes from the company's colour (a variation of it), not from the Witcher green.
+      style.setProperty('--accent', tokens.accent); style.setProperty('--on-accent', tokens.onAccent);
+      style.setProperty('--accent-soft', tokens.soft); style.setProperty('--accent-mid', tokens.mid);
+      style.setProperty('--accent-line', tokens.line); style.setProperty('--accent-ink', tokens.ink);
+    }
     document.title = b && b.company ? `Interview · ${b.company}` : 'Interview · Witcher';
   }
 
@@ -237,9 +277,7 @@
     S.messages.push(entry);
     const list = document.getElementById('msgs');
     if (!list) return;
-    // Only the question being answered is highlighted.
-    list.querySelectorAll('.w-turn').forEach(node => node.remove());
-    list.querySelectorAll('.w-bubble-current').forEach(node => node.classList.remove('w-bubble-current'));
+    clearCurrent(list); // only the question being answered is highlighted
     const company = esc((S.branding && S.branding.company) || 'Witcher');
     const html = role === 'ai'
       ? `<div class="w-msg w-msg-ai"><span class="w-ai-icon" aria-hidden="true">✦</span><div class="w-msg-body">
@@ -251,10 +289,25 @@
     list.scrollTop = list.scrollHeight;
   }
 
+  function clearCurrent(list) {
+    list.querySelectorAll('.w-turn').forEach(node => node.remove());
+    list.querySelectorAll('.w-bubble-current').forEach(node => node.classList.remove('w-bubble-current'));
+  }
+
+  // A line in the same conversation: the interview continues the chat, it does not open a new one.
+  function addDivider(text) {
+    const list = document.getElementById('msgs');
+    if (!list) return;
+    clearCurrent(list);
+    list.insertAdjacentHTML('beforeend', `<div class="w-divider"><span>${esc(text)}</span></div>`);
+    list.scrollTop = list.scrollHeight;
+  }
+
   // The dock under the chat: whose turn it is, the timer and the recording buttons.
   function renderDock() {
     const dock = document.getElementById('dock');
     if (!dock) return;
+    Wave.stop();
     const interview = S.phase === 'interview';
     const name = S.firstName ? `, ${esc(S.firstName)}` : '';
     const left = S.rec && S.rec.state === 'recording' ? Core.formatClock((Date.now() - S.rec.startedAt) / 1000) : '';
@@ -293,12 +346,14 @@
       ? `<select class="w-select" id="mic-select" aria-label="Microphone">${S.devices.map((device, index) => `<option value="${esc(device.deviceId)}"${device.deviceId === S.deviceId ? ' selected' : ''}>${esc(device.label || `Microphone ${index + 1}`)}</option>`).join('')}</select>`
       : '';
     const ready = Mic.stream ? `<span class="w-ready"><i></i> Microphone ready</span><span class="w-meter" aria-hidden="true"><i id="meter"></i></span>` : '<span class="w-ready w-ready-off"><i></i> Microphone not started yet</span>';
+    const wave = S.mode === 'recording' ? '<canvas class="w-wave" id="wave" aria-hidden="true"></canvas>' : '';
     dock.innerHTML = `<div class="w-dock-main"><span class="w-mic-icon" aria-hidden="true">🎙</span>
-        <div class="w-dock-text"><strong>${title}</strong><span class="w-dock-sub">${sub}</span></div>
+        <div class="w-dock-text"><strong>${title}</strong><span class="w-dock-sub">${sub}</span></div>${wave}
         <div class="w-dock-actions">${buttons}</div></div>
-      <p class="w-error" role="alert" id="notice">${esc(S.notice)}</p>
+      <p class="w-error${S.noticeInfo ? ' w-info' : ''}" role="alert" id="notice">${esc(S.notice)}</p>
       <div class="w-dock-mic">${ready}${picker}</div>`;
     if (Mic.stream) Mic.meter();
+    if (S.mode === 'recording') Wave.start(document.getElementById('wave'));
     const select = document.getElementById('mic-select');
     if (select) select.addEventListener('change', async () => {
       S.deviceId = select.value; Mic.close();
@@ -308,10 +363,10 @@
     tick();
   }
 
-  function setNotice(text) {
-    S.notice = text || '';
+  function setNotice(text, info) {
+    S.notice = text || ''; S.noticeInfo = !!info;
     const box = document.getElementById('notice');
-    if (box) box.textContent = S.notice;
+    if (box) { box.textContent = S.notice; box.classList.toggle('w-info', !!info); }
   }
 
   // ---------------------------------------------------------------------------------------------- timer
@@ -319,11 +374,17 @@
     if (S.screen !== 'chat') return;
     const elapsed = document.getElementById('elapsed');
     if (elapsed && S.rec && S.rec.state === 'recording') elapsed.textContent = Core.formatClock((Date.now() - S.rec.startedAt) / 1000);
+    if (S.phase === 'intro' && S.rec && S.rec.state === 'recording' && (Date.now() - S.rec.startedAt) / 1000 >= Core.TEST_MAX_SECONDS) {
+      S.notice = 'The test recording is limited to 1 minute, so it stopped.'; S.noticeInfo = true;
+      stopRecording();
+      return;
+    }
     if (S.phase !== 'interview') return;
     const left = Core.secondsLeftFrom(S.deadline, Date.now());
     const label = document.getElementById('timer');
     if (label) {
-      label.textContent = left > 0 ? `Time left: ${Core.formatClock(left)}` : 'Time is up for this answer';
+      label.textContent = left > 0 ? `Time left: ${Core.formatClock(left)}`
+        : (S.mode === 'recorded' ? 'Time is up. You can still send your answer, or skip.' : 'Time is up for this answer');
       label.className = `w-timer w-timer-${Core.timerTone(left)}`;
     }
     if (left > 0) return;
@@ -382,7 +443,7 @@
     rec.mr.onstop = () => {
       if (S.rec !== rec) return;
       const blob = new Blob(rec.chunks, { type: rec.mimeType });
-      const seconds = Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000));
+      const seconds = Math.min(Core.ANSWER_SECONDS, Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000)));
       rec.state = 'stopped';
       if (!blob.size) { S.mode = 'idle'; setNotice('Nothing was recorded. Please try again.'); renderDock(); return; }
       S.take = { blob, url: URL.createObjectURL(blob), seconds };
@@ -418,7 +479,7 @@
   function showPrompt(prompt, secondsLeft) {
     S.prompt = prompt;
     S.deadline = Date.now() + (typeof secondsLeft === 'number' ? secondsLeft : Core.ANSWER_SECONDS) * 1000;
-    S.mode = 'idle'; S.take = null; S.rec = null; S.notice = ''; S.skipShown = false;
+    S.mode = 'idle'; S.take = null; S.rec = null; S.notice = ''; S.noticeInfo = false; S.skipShown = false;
     const kind = prompt.phase === 'followup' ? 'Follow-up' : `Question ${prompt.qIndex + 1} of ${S.total}`;
     const progress = document.getElementById('progress');
     if (progress) progress.textContent = kind;
@@ -438,9 +499,7 @@
       setNotice(Core.errorText(result.json.error)); renderDock(); return;
     }
     S.phase = 'interview'; S.started = true; S.total = result.json.totalQuestions || S.total;
-    S.messages = [];
-    const list = document.getElementById('msgs');
-    if (list) list.innerHTML = '';
+    addDivider('The interview starts now');
     startTimers();
     showPrompt(result.json.prompt, result.json.secondsLeft);
   }

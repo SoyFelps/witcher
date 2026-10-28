@@ -10,6 +10,7 @@
   const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
   const ANSWER_SECONDS = 180;
   const WARN_SECONDS = 30;
+  const TEST_MAX_SECONDS = 60; // the microphone test recording is cut after one minute
   const MIME_PREFERENCE = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
   /** The interview link is `interview.html#i=<link id>`. Returns the id, or null when it is missing or malformed. */
@@ -34,15 +35,46 @@
     return COLOR_RE.test(String(value || ''));
   }
 
-  /** Text colour that stays readable on top of a brand colour: white on dark colours, near-black on light ones. */
-  function contrastText(hex) {
-    if (!isValidColor(hex)) return '#ffffff';
+  function luminance(hex) {
     const channel = index => {
       const value = parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
       return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
     };
-    const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
-    return luminance > 0.4 ? '#17251e' : '#ffffff';
+    return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+  }
+
+  /** WCAG contrast ratio between two #rrggbb colours (1 to 21). */
+  function contrastRatio(a, b) {
+    const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (high + 0.05) / (low + 0.05);
+  }
+
+  /** Text colour that stays readable on top of a brand colour: white on dark colours, near-black on light ones. */
+  function contrastText(hex) {
+    if (!isValidColor(hex)) return '#ffffff';
+    return luminance(hex) > 0.4 ? '#17251e' : '#ffffff';
+  }
+
+  /** `ratio` of colour A mixed with the rest of colour B, as #rrggbb. */
+  function mixHex(a, b, ratio) {
+    const part = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+    return '#' + [0, 1, 2].map(i => Math.round(part(a, i) * ratio + part(b, i) * (1 - ratio)).toString(16).padStart(2, '0')).join('');
+  }
+
+  /**
+   * Every colour of the page derived from the company's brand colour: soft, mid and line tints for backgrounds and
+   * borders, and an ink for text on those tints that is always dark enough to read (contrast of at least 4.5).
+   */
+  function accentTokens(hex) {
+    if (!isValidColor(hex)) return null;
+    const white = '#ffffff';
+    const soft = mixHex(hex, white, 0.12);
+    let ink = hex;
+    for (let ratio = 1; contrastRatio(ink, soft) < 4.5 && ratio > 0; ) {
+      ratio = Math.max(0, ratio - 0.1);
+      ink = mixHex(hex, '#17251e', ratio);
+    }
+    return { accent: hex, onAccent: contrastText(hex), soft, mid: mixHex(hex, white, 0.22), line: mixHex(hex, white, 0.4), ink };
   }
 
   /** First format the browser can record in, from `isSupported(mime)` (MediaRecorder.isTypeSupported). */
@@ -95,7 +127,7 @@
         return `Too many wrong codes. Please wait about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} and try again.`;
       }
       case 'consent_required': return 'Please accept the terms to continue.';
-      case 'time_over': return 'Time is up for this answer. You can skip to the next question.';
+      case 'time_over': return 'The time to send this answer has passed. You can skip to the next question.';
       case 'out_of_sync': return 'Something went out of sync. Please try again.';
       case 'ai_unavailable': return 'The AI assistant is not available right now. Please try sending your answer again in a moment.';
       case 'ai_not_configured': return 'The AI assistant is not available right now. Please try again later.';
@@ -122,7 +154,7 @@
   }
 
   return {
-    ANSWER_SECONDS, WARN_SECONDS, parseLinkId, formatClock, isValidColor, contrastText, pickMimeType,
+    ANSWER_SECONDS, WARN_SECONDS, TEST_MAX_SECONDS, parseLinkId, formatClock, isValidColor, contrastText, contrastRatio, mixHex, accentTokens, pickMimeType,
     secondsLeftFrom, timerTone, stateScreen, errorText, cleanCode, clockTime, escapeHtml,
   };
 });
