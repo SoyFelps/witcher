@@ -14,6 +14,8 @@ export const MODEL_CHAIN: ModelChoice[] = [
   { name: "gemini-3.5-flash", thinkingLevel: "minimal", timeoutMs: 30_000 }, // the last resort gets more time
 ];
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+export const ANSWER_PAUSES = [0, 2000]; // wait before each round, in ms
+export const EVALUATION_PAUSES = [0, 25_000, 25_000];
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 // Offensive speech must reach the model to be classified, so the usual content blocks are off for these calls.
@@ -162,14 +164,38 @@ export interface GeminiOptions {
   models?: ModelChoice[];
   fetchFn?: typeof fetch;
   timeoutMs?: number;
+  wait?: (ms: number) => Promise<void>;
 }
 
 export function createGeminiProvider(options: GeminiOptions): AiProvider {
   const chain = options.models && options.models.length ? options.models : MODEL_CHAIN;
   const fetchFn = options.fetchFn ?? fetch;
+  const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-  async function generate(request: { generationConfig: Record<string, unknown> }): Promise<unknown> {
+  // One round tries every model once. `pauses` holds the wait before each round: an answer gets two quick rounds
+  // (and the candidate can still send it again); the final evaluation runs in the background with nobody to retry
+  // it, so it gets three rounds 25 s apart (a per-minute usage limit needs about that long to reset). `budgetMs`
+  // stops new rounds when the call has already taken too long for the function to finish.
+  async function generate(request: { generationConfig: Record<string, unknown> }, pauses: number[], budgetMs: number, retryRateLimit: boolean): Promise<unknown> {
     let lastStatus = 0;
+    const started = Date.now();
+    for (let round = 0; round < pauses.length; round++) {
+      if (round > 0) {
+        if (Date.now() - started + pauses[round] > budgetMs) break;
+        await wait(pauses[round]);
+      }
+      const done = { stop: false };
+      const result = await runChain(request, done);
+      if (result !== undefined) return result;
+      lastStatus = done.status ?? 0;
+      if (done.stop) break; // a bad request will not get better with another try
+      // Hitting a usage limit again two seconds later only uses more of the quota: only the background evaluation waits it out.
+      if (lastStatus === 429 && !retryRateLimit) break;
+    }
+    throw new Error(`gemini_http_${lastStatus}`); // only the status: never a body, a key or anything the candidate said
+  }
+
+  async function runChain(request: { generationConfig: Record<string, unknown> }, done: { stop: boolean; status?: number }): Promise<unknown | undefined> {
     for (const model of chain) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? model.timeoutMs);
@@ -181,23 +207,23 @@ export function createGeminiProvider(options: GeminiOptions): AiProvider {
           signal: controller.signal,
         });
         if (response.ok) return await response.json();
-        lastStatus = response.status;
-        if (!RETRY_STATUSES.has(response.status)) break; // a bad request will not get better with another model
+        done.status = response.status;
+        if (!RETRY_STATUSES.has(response.status)) { done.stop = true; return undefined; } // a bad request will not get better with another model
       } catch {
-        lastStatus = 0; // timeout or network problem: try the next model
+        done.status = 0; // timeout or network problem: try the next model
       } finally {
         clearTimeout(timer);
       }
     }
-    throw new Error(`gemini_http_${lastStatus}`); // only the status: never a body, a key or anything the candidate said
+    return undefined;
   }
 
   return {
     async analyseAnswer(context) {
-      return parseAnswerResponse(await generate(buildAnswerRequest(context)), context);
+      return parseAnswerResponse(await generate(buildAnswerRequest(context), ANSWER_PAUSES, 60_000, false), context);
     },
     async evaluate(context) {
-      return parseEvaluationResponse(await generate(buildEvaluationRequest(context)));
+      return parseEvaluationResponse(await generate(buildEvaluationRequest(context), EVALUATION_PAUSES, 110_000, true));
     },
   };
 }

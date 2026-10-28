@@ -298,10 +298,16 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
     return response(req, 200, { prompt: { qIndex: next.qIndex, phase: "question", text: questions[next.qIndex] }, secondsLeft: ANSWER_SECONDS });
   }
 
-  // Last answer: save it, close the conversation and write the evaluation.
+  // Last answer: save it and close the conversation. The evaluation is written after the response, so the candidate
+  // sees the thank-you screen at once (it can take a while when Google is busy). Until it is written the
+  // interview is completed with no evaluation yet.
   toSave.push({ role: "ai", kind: "closing", body: CLOSING_TEXT });
   await addMessages(row.id, toSave);
-  await finish(row, languageFlag);
+  const evaluation = finish(row, languageFlag).catch((error) => console.error("finish failed:", error instanceof Error ? error.message : "unknown error"));
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(evaluation);
+  else await evaluation;
   return response(req, 200, { done: true });
 }
 
