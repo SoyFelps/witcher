@@ -108,9 +108,9 @@ test('responses wrapped in code fences or with thinking parts are still read; ga
 
 test('provider: key in a header, the busy first model falls back to the second, errors carry only the status', async () => {
   const { createGeminiProvider, MODEL_CHAIN } = await gemini();
-  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.8-flash', 'gemini-3.5-flash']);
+  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']);
   assert.ok(MODEL_CHAIN[0].timeoutMs < MODEL_CHAIN[1].timeoutMs, 'the first model gives way sooner than the last resort');
-  assert.ok(MODEL_CHAIN.reduce((sum, model) => sum + model.timeoutMs, 0) <= 50_000, 'the candidate never waits more than about 50 s');
+  assert.ok(MODEL_CHAIN.reduce((sum, model) => sum + model.timeoutMs, 0) <= 80_000, 'one round never takes more than about 80 s');
   const calls = [];
   const fetchFn = async (url, init) => {
     calls.push({ url, headers: init.headers, body: JSON.parse(init.body) });
@@ -133,15 +133,15 @@ test('provider: key in a header, the busy first model falls back to the second, 
   const attempts = [];
   const stuck = createGeminiProvider({ apiKey: 'k', wait: async () => {}, fetchFn: async (url) => { attempts.push(url); return { ok: false, status: 503, json: async () => ({}) }; } });
   await assert.rejects(stuck.evaluate({ job: 'x', role: null, company: 'y', lines: [] }), /gemini_http_503/);
-  assert.equal(attempts.length, 6, 'the final evaluation gets three rounds over both models, then fails');
+  assert.equal(attempts.length, 9, 'the final evaluation gets three rounds over all three models, then fails');
   const answerAttempts = [];
   const answering = createGeminiProvider({ apiKey: 'k', wait: async () => {}, fetchFn: async (url) => { answerAttempts.push(url); return { ok: false, status: 503, json: async () => ({}) }; } });
   await assert.rejects(answering.analyseAnswer(answerContext()), /gemini_http_503/);
-  assert.equal(answerAttempts.length, 4, 'an answer gets two quick rounds on 503; the candidate can still send it again');
+  assert.equal(answerAttempts.length, 6, 'an answer gets two quick rounds on 503; the candidate can still send it again');
   const limited = [];
   const limitedProvider = createGeminiProvider({ apiKey: 'k', wait: async () => {}, fetchFn: async (url) => { limited.push(url); return { ok: false, status: 429, json: async () => ({}) }; } });
   await assert.rejects(limitedProvider.analyseAnswer(answerContext()), /gemini_http_429/);
-  assert.equal(limited.length, 2, 'a usage limit (429) is tried on each model once and is not repeated for an answer');
+  assert.equal(limited.length, 3, 'a usage limit (429) is tried on each model once and is not repeated for an answer');
   const { EVALUATION_PAUSES, ANSWER_PAUSES } = await gemini();
   assert.deepEqual(ANSWER_PAUSES, [0, 2000]);
   assert.deepEqual(EVALUATION_PAUSES, [0, 25000, 25000]);
