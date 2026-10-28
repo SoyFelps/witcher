@@ -1,0 +1,23 @@
+/* Witcher styles. Colours are design tokens defined once in :root (same names and values as Pathway,
+   see "Design tokens do Pathway.md"); everything else refers to them by name. tests/base.test.js enforces it. */
+:root{
+  --ink:#17251e;--text-heading:#26392d;--text-strong:#34463a;--text-body:#425148;--muted:#66736b;--text-subtle:#748178;--soft:#89958e;--text-faint:#a3ada5;
+  --green:#315f4a;--green-deep:#274f3c;--green-2:#40765c;--green-text:#477250;--green-hover:#a9bdaa;--green-focus:#6d9275;--lime:#d2f37a;--lime-hover:#c3e869;
+  --surface:#ffffff;--bg-page:#f8f8f8;--tint:#edf4ee;--mint-strong:#d8e8d9;--forest:#22372a;
+  --border-subtle:#edf1ed;--line:#e2e9e4;--border-strong:#cbd7ce;
+  --red:#b94841;--red-text:#a14c41;--red-bg:#fff0ed;--red-border:#eed6d1;
+  --amber-text:#936c2e;--amber-bg:#fff3dc;--amber-border:#ebdcc2;
+  --ring-soft:rgba(83,133,94,.1);--ring:rgba(91,138,108,.26);
+  --shadow-xs:rgba(28,47,36,.04);--shadow-sm:rgba(29,50,35,.08);--shadow-md:rgba(28,56,36,.14);
+  --overlay:rgba(16,29,21,.47);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg-page);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--green)}
+.w-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.w-card{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 28px;box-shadow:0 8px 24px var(--shadow-sm)}
+.w-brand{display:flex;align-items:center;gap:10px;margin:0 0 20px;font-size:20px;font-weight:700;color:var(--green)}
+.w-mark{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:10px;background:var(--green);color:var(--lime);font-size:20px}
+h1{margin:0 0 8px;font-size:22px;line-height:1.25;color:var(--text-heading)}
+p{margin:0 0 12px;color:var(--muted)}
+.w-note{margin-top:20px;padding:10px 12px;border-radius:10px;background:var(--tint);color:var(--green-text);font-size:14px}

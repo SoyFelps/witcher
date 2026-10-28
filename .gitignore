@@ -1,0 +1,5 @@
+# Internal planning notes and Claude instructions stay local: this repository is public.
+agent.md
+plano-witcher.md
+.claude/
+node_modules/
