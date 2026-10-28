@@ -10,6 +10,8 @@
   --ring-soft:rgba(83,133,94,.1);--ring:rgba(91,138,108,.26);
   --shadow-xs:rgba(28,47,36,.04);--shadow-sm:rgba(29,50,35,.08);--shadow-md:rgba(28,56,36,.14);
   --overlay:rgba(16,29,21,.47);
+  /* Brand colour of the interview page: the company's colour when it has one (set by interview.js), else the Witcher green. */
+  --accent:var(--green);--on-accent:var(--surface);
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg-page);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -21,3 +23,98 @@ a{color:var(--green)}
 h1{margin:0 0 8px;font-size:22px;line-height:1.25;color:var(--text-heading)}
 p{margin:0 0 12px;color:var(--muted)}
 .w-note{margin-top:20px;padding:10px 12px;border-radius:10px;background:var(--tint);color:var(--green-text);font-size:14px}
+
+/* ---------------------------------------------------------------------------------------------------------
+   Candidate interview page (interview.html)
+   --------------------------------------------------------------------------------------------------------- */
+[hidden]{display:none !important}
+button,input,select{font:inherit;color:inherit}
+.w-loading{padding:48px 16px;text-align:center;color:var(--muted)}
+.w-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
+.w-top-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.w-logo{height:34px;width:auto;max-width:140px;object-fit:contain}
+.w-top .w-mark{background:var(--accent);color:var(--on-accent)}
+.w-company{font-size:20px;font-weight:700;color:var(--text-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.w-powered{padding-left:12px;border-left:1px solid var(--line);color:var(--soft);font-size:14px;white-space:nowrap}
+.w-help{background:none;border:0;color:var(--muted);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px}
+.w-help:hover{background:var(--bg-page);color:var(--ink)}
+.w-help-panel{margin:0;padding:12px 24px;background:var(--tint);color:var(--text-body);font-size:14px;border-bottom:1px solid var(--line)}
+.w-stage{max-width:960px;margin:0 auto;padding:28px 16px 12px}
+.w-card-wide{max-width:560px;margin:24px auto}
+.w-title{margin:0 0 4px;font-size:32px;line-height:1.15;color:var(--text-heading)}
+.w-sub{margin:0 0 20px;color:var(--muted)}
+.w-label{display:block;margin:20px 0 6px;font-size:14px;font-weight:600;color:var(--text-strong)}
+.w-input{width:100%;padding:12px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);font-size:18px}
+.w-input:focus,.w-select:focus,.w-btn:focus-visible,.w-help:focus-visible{outline:2px solid var(--green-focus);outline-offset:2px;box-shadow:0 0 0 4px var(--ring-soft)}
+.w-code{font-size:28px;letter-spacing:.35em;text-align:center;font-weight:700}
+.w-error{min-height:20px;margin:10px 0 0;color:var(--red-text);font-size:14px}
+.w-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer}
+.w-btn:hover:not(:disabled){filter:brightness(.92)}
+.w-btn:disabled{opacity:.45;cursor:not-allowed}
+.w-btn-ghost{background:var(--surface);color:var(--ink);border-color:var(--border-strong)}
+.w-btn-ghost:hover:not(:disabled){background:var(--bg-page);filter:none}
+.w-card .w-btn{margin-top:16px}
+.w-list{margin:12px 0 18px;padding-left:20px;color:var(--text-body)}
+.w-list li{margin:0 0 10px}
+.w-check{display:flex;gap:10px;align-items:flex-start;margin:6px 0 0;color:var(--text-body);cursor:pointer}
+.w-check input{margin-top:5px;width:18px;height:18px;accent-color:var(--accent)}
+.w-done{text-align:center}
+.w-done-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;margin-bottom:12px;border-radius:50%;background:var(--tint);color:var(--green-text);font-size:28px}
+
+.w-chat{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 18px var(--shadow-xs);overflow:hidden}
+.w-chat-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.w-chat-head-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.w-chat-head-text small{color:var(--soft)}
+.w-progress{padding:4px 10px;border-radius:999px;background:var(--tint);color:var(--green-text);font-size:13px;font-weight:600;white-space:nowrap}
+.w-ai-icon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:var(--tint);color:var(--accent)}
+.w-msgs{display:flex;flex-direction:column;gap:18px;max-height:46vh;min-height:140px;overflow-y:auto;padding:20px}
+.w-msg{display:flex;gap:12px;max-width:100%}
+.w-msg-ai .w-msg-body{max-width:min(640px,86%)}
+.w-msg-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:4px;color:var(--soft);font-size:13px}
+.w-msg-meta strong{color:var(--text-strong)}
+.w-tag{padding:1px 6px;border-radius:6px;background:var(--tint);color:var(--green-text);font-size:11px;font-weight:700}
+.w-turn{padding:1px 8px;border-radius:6px;background:var(--mint-strong);color:var(--green-deep);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.w-bubble{padding:14px 16px;border-radius:12px;background:var(--bg-page);color:var(--ink)}
+.w-bubble-current{background:var(--tint);border:1px solid var(--green-hover)}
+.w-msg-you{flex-direction:column;align-items:flex-end;margin-left:auto}
+.w-audio{display:inline-flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;background:var(--tint);color:var(--green-deep);font-size:14px}
+.w-sent{color:var(--green-text);font-weight:700}
+
+.w-dock{padding:16px 20px;border-top:1px solid var(--line);background:var(--bg-page)}
+.w-dock-main{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.w-mic-icon{display:inline-flex;flex:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--tint)}
+.w-dock-text{display:flex;flex-direction:column;flex:1;min-width:200px}
+.w-dock-text strong{color:var(--text-heading)}
+.w-dock-sub{font-size:14px;color:var(--muted)}
+.w-dock-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.w-dock-actions .w-btn{margin-top:0}
+.w-timer{font-weight:600}
+.w-timer-ok{color:var(--muted)}
+.w-timer-warn{color:var(--amber-text)}
+.w-timer-over{color:var(--red-text)}
+.w-rec{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--red-text);font-variant-numeric:tabular-nums}
+.w-rec i{width:10px;height:10px;border-radius:50%;background:var(--red);animation:w-pulse 1s ease-in-out infinite}
+@keyframes w-pulse{50%{opacity:.25}}
+.w-player{max-width:240px;height:40px}
+.w-wait{display:inline-flex;align-items:center;gap:10px;color:var(--muted)}
+.w-spin{width:16px;height:16px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:w-turn-around .8s linear infinite}
+@keyframes w-turn-around{to{transform:rotate(360deg)}}
+.w-dock-mic{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.w-ready{display:inline-flex;align-items:center;gap:6px}
+.w-ready i{width:8px;height:8px;border-radius:50%;background:var(--status-ok,var(--green-text))}
+.w-ready-off i{background:var(--text-faint)}
+.w-meter{display:inline-block;width:80px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.w-meter i{display:block;height:100%;width:0;background:var(--green-2);transition:width .08s linear}
+.w-select{max-width:260px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);font-size:13px}
+.w-foot{max-width:960px;margin:0 auto;padding:14px 16px 28px;text-align:center;color:var(--soft);font-size:13px}
+
+@media (max-width:640px){
+  .w-top{padding:12px 16px}
+  .w-powered{display:none}
+  .w-title{font-size:26px}
+  .w-msg-ai .w-msg-body{max-width:100%}
+  .w-dock-actions{width:100%;justify-content:stretch}
+  .w-dock-actions .w-btn{flex:1}
+  .w-dock-mic{justify-content:flex-start}
+}
+@media (prefers-reduced-motion:reduce){.w-rec i,.w-spin{animation:none}}

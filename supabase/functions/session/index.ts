@@ -9,6 +9,7 @@ import {
   CODE_LOCK_SECONDS,
   CODE_MAX_ATTEMPTS,
   CONSENT_VERSION,
+  firstName,
   impressionFor,
   isEnglish,
   maskEmail,
@@ -176,7 +177,8 @@ async function actionVerify(req: Request, body: Record<string, unknown>) {
     code_locked_until: null,
   }).eq("id", row.id).eq("status", "invited");
   if (error) throw error;
-  return response(req, 200, { sessionToken: token, consentVersion: CONSENT_VERSION, totalQuestions: (row.questions as unknown[]).length, branding: branding(row) });
+  // The first name is only revealed after the right code, so a forwarded or guessed link never shows it.
+  return response(req, 200, { sessionToken: token, consentVersion: CONSENT_VERSION, totalQuestions: (row.questions as unknown[]).length, branding: branding(row), candidateFirstName: firstName(row.candidate_name) });
 }
 
 async function actionConsent(req: Request, body: Record<string, unknown>) {

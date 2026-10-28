@@ -59,6 +59,11 @@ export function maskEmail(email: string): string {
   return `${email[0]}***${email.slice(at)}`;
 }
 
+/** First word of the candidate's name, for greetings ("Hello, Marina"). */
+export function firstName(name: string): string {
+  return String(name ?? "").trim().split(/\s+/)[0].slice(0, 40);
+}
+
 /** Keeps only the digits of what the candidate typed as the access code. */
 export function normaliseCode(value: unknown): string {
   return String(value ?? "").replace(/\D/g, "").slice(0, 6);

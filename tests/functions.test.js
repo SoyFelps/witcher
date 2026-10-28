@@ -226,3 +226,11 @@ test('keep-alive workflow pings both projects with public keys only', () => {
   assert.equal((yml.match(/sb_publishable_/g) || []).length, 2);
   assert.doesNotMatch(yml, /sb_secret_|service_role|eyJhbGci/);
 });
+
+test('greeting uses only the first word of the name', async () => {
+  const { firstName } = await flow();
+  assert.equal(firstName('  Marina   Souza '), 'Marina');
+  assert.equal(firstName(''), '');
+  assert.equal(firstName('A'.repeat(100)).length, 40);
+  assert.match(read('supabase/functions/session/index.ts'), /candidateFirstName: firstName\(row\.candidate_name\)/);
+});
