@@ -82,6 +82,16 @@ test('page colours: every tint is a variation of the company colour and stays re
   assert.equal(Core.TEST_MAX_SECONDS, 60);
 });
 
+test('a recording with no voice is recognised and never sent', () => {
+  assert.equal(Core.VOICE_MIN_LEVEL, 0.06);
+  assert.ok(Core.hasVoice(0.4) && Core.hasVoice(0.06));
+  assert.ok(!Core.hasVoice(0) && !Core.hasVoice(0.03) && !Core.hasVoice(undefined) && !Core.hasVoice('x'));
+  assert.match(Core.errorText('no_voice'), /couldn't hear your voice/);
+  const js = read('interview.js');
+  assert.ok(js.includes('Core.hasVoice(') && js.includes('const silent = interview && S.take && !S.take.voiced'), 'the page checks for voice before offering Send');
+  assert.ok(js.includes("(silent ? '' : '<button class=\"w-btn\" type=\"button\" data-action=\"send\">Send answer</button>')"), 'no Send button for a silent recording');
+});
+
 test('chat text is escaped', () => {
   assert.equal(Core.escapeHtml('<img src=x onerror="a">'), '&lt;img src=x onerror=&quot;a&quot;&gt;');
 });

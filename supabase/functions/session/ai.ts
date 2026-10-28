@@ -9,6 +9,7 @@ export interface AnswerContext {
   isFollowUp: boolean;
   audioBase64: string;
   mimeType: string;
+  durationSeconds?: number; // as reported by the page; only used to spot a transcript that is far too long for the audio
 }
 
 export interface AnswerAnalysis {

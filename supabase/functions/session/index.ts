@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { hashCode, randomToken, sha256Hex, timingSafeEqual } from "./crypto.ts";
 import { type AiProvider, stubProvider, type TranscriptLine } from "./ai.ts";
+import { createGeminiProvider } from "./gemini.ts";
 import {
   ABANDON_AFTER_SECONDS,
   ANSWER_SECONDS,
@@ -49,10 +50,15 @@ const admin = projectUrl && serviceKey
   ? createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
 
-// Phase 2 only has the offline stub, and it is never allowed on production. Phase 4 adds the Gemini provider.
+// The real AI is Gemini (needs the GEMINI_API_KEY secret). AI_PROVIDER=stub switches on the offline stub for tests,
+// and it is never allowed on production. Without a key (and no stub) the interview answers "ai_not_configured".
+let gemini: AiProvider | null = null;
 function aiProvider(): AiProvider | null {
-  if (Deno.env.get("AI_PROVIDER") === "stub" && !projectUrl.includes(PRODUCTION_REF)) return stubProvider;
-  return null;
+  const choice = Deno.env.get("AI_PROVIDER") || "gemini";
+  if (choice === "stub") return projectUrl.includes(PRODUCTION_REF) ? null : stubProvider;
+  const apiKey = Deno.env.get("GEMINI_API_KEY") || "";
+  if (!apiKey) return null;
+  return gemini ??= createGeminiProvider({ apiKey });
 }
 
 function response(req: Request, status: number, body: unknown) {
@@ -253,6 +259,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
         isFollowUp: position.phase === "followup",
         audioBase64: audio,
         mimeType,
+        durationSeconds,
       });
     } catch (error) {
       console.error("AI analysis failed:", error instanceof Error ? error.message : "unknown error");
@@ -301,7 +308,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
 async function finish(row: Row, languageFlag: boolean) {
   const provider = aiProvider();
   let evaluation = "The evaluation could not be generated automatically. Please review the transcript.";
-  let aiImpression: "positive" | "negative" = "negative";
+  let aiImpression: "positive" | "negative" | null = null; // stays null when the AI fails: an outage must not hurt the candidate
   if (provider) {
     try {
       const { data, error } = await admin!.from("interview_messages").select("role,kind,body").eq("interview_id", row.id).order("seq");

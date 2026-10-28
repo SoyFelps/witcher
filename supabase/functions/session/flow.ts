@@ -48,8 +48,8 @@ export function isEnglish(language: string | null | undefined): boolean {
 }
 
 /** An answer in another language always means a negative impression (owner decision 2026-10-27). */
-export function impressionFor(languageFlag: boolean, aiImpression: "positive" | "negative"): "positive" | "negative" {
-  return languageFlag ? "negative" : aiImpression;
+export function impressionFor(languageFlag: boolean, aiImpression: "positive" | "negative" | null): "positive" | "negative" | null {
+  return languageFlag ? "negative" : aiImpression; // null = the AI could not evaluate: no badge, never a made-up negative
 }
 
 /** `a***@example.com`: enough to recognise the address, not enough to reveal it. */

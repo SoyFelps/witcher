@@ -136,6 +136,8 @@ test('an answer in another language always gives a negative impression; unknown 
   assert.equal(impressionFor(true, 'positive'), 'negative');
   assert.equal(impressionFor(false, 'positive'), 'positive');
   assert.equal(impressionFor(false, 'negative'), 'negative');
+  assert.equal(impressionFor(false, null), null, 'an AI failure never invents a negative impression');
+  assert.equal(impressionFor(true, null), 'negative', 'another language is still negative');
 });
 
 test('access code input keeps only six digits', async () => {
@@ -209,7 +211,7 @@ test('functions: no JWT (own checks), test and stub modes are refused on product
   const session = read('supabase/functions/session/index.ts');
   for (const source of [api, session]) assert.match(source, /PRODUCTION_REF = "iwpmsfoovppqnldciric"/);
   assert.match(api, /TEST_MODE = Deno\.env\.get\("WITCHER_TEST_MODE"\) === "1" && !projectUrl\.includes\(PRODUCTION_REF\)/);
-  assert.match(session, /AI_PROVIDER"\) === "stub" && !projectUrl\.includes\(PRODUCTION_REF\)/);
+  assert.ok(session.includes('choice === "stub"') && session.includes('projectUrl.includes(PRODUCTION_REF) ? null : stubProvider'), 'the stub is never used on production');
   assert.match(api, /x-witcher-api-key/);
   assert.match(api, /timingSafeEqual/);
   assert.doesNotMatch(session, /storage/i, 'the session function never uses Storage');

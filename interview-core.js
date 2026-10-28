@@ -11,6 +11,7 @@
   const ANSWER_SECONDS = 180;
   const WARN_SECONDS = 30;
   const TEST_MAX_SECONDS = 60; // the microphone test recording is cut after one minute
+  const VOICE_MIN_LEVEL = 0.06; // loudest moment of a recording (0 to 1): below this nothing but room noise was captured
   const MIME_PREFERENCE = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
 
   /** The interview link is `interview.html#i=<link id>`. Returns the id, or null when it is missing or malformed. */
@@ -90,6 +91,11 @@
     return Math.max(0, Math.min(ANSWER_SECONDS, Math.ceil((deadlineMs - nowMs) / 1000)));
   }
 
+  /** True when the loudest moment of a recording is above room noise. A recording without any voice is not sent to the AI. */
+  function hasVoice(peakLevel) {
+    return Number(peakLevel) >= VOICE_MIN_LEVEL;
+  }
+
   function timerTone(secondsLeft) {
     if (secondsLeft <= 0) return 'over';
     return secondsLeft <= WARN_SECONDS ? 'warn' : 'ok';
@@ -131,6 +137,7 @@
       case 'out_of_sync': return 'Something went out of sync. Please try again.';
       case 'ai_unavailable': return 'The AI assistant is not available right now. Please try sending your answer again in a moment.';
       case 'ai_not_configured': return 'The AI assistant is not available right now. Please try again later.';
+      case 'no_voice': return "We couldn't hear your voice in this recording. Check that your microphone is on and not muted, then try again.";
       case 'audio_invalid': return 'We could not use that recording. Please record your answer again.';
       case 'network': return 'We could not reach the server. Check your connection and try again.';
       default: return 'Something went wrong. Please try again.';
@@ -154,7 +161,7 @@
   }
 
   return {
-    ANSWER_SECONDS, WARN_SECONDS, TEST_MAX_SECONDS, parseLinkId, formatClock, isValidColor, contrastText, contrastRatio, mixHex, accentTokens, pickMimeType,
+    ANSWER_SECONDS, WARN_SECONDS, TEST_MAX_SECONDS, VOICE_MIN_LEVEL, hasVoice, parseLinkId, formatClock, isValidColor, contrastText, contrastRatio, mixHex, accentTokens, pickMimeType,
     secondsLeftFrom, timerTone, stateScreen, errorText, cleanCode, clockTime, escapeHtml,
   };
 });

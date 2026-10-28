@@ -56,6 +56,14 @@
       if (this.context) { try { this.context.close(); } catch (error) { /* already closed */ } }
       this.stream = null; this.context = null; this.analyser = null;
     },
+    readLevel() {
+      if (!this.analyser) return 0;
+      const data = new Uint8Array(this.analyser.fftSize);
+      this.analyser.getByteTimeDomainData(data);
+      let peak = 0;
+      for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
+      return Math.min(1, peak / 64);
+    },
     meter() {
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -335,9 +343,12 @@
       const second = timeIsUp
         ? '<button class="w-btn w-btn-ghost" type="button" data-action="skip">Skip this question</button>'
         : '<button class="w-btn w-btn-ghost" type="button" data-action="delete">Try again</button>';
+      // A recording with no voice in it is never sent to the AI: it would only invent words. Try again (or skip) is offered instead.
+      const silent = interview && S.take && !S.take.voiced;
       buttons = `${player}${second}${interview
-        ? '<button class="w-btn" type="button" data-action="send">Send answer</button>'
+        ? (silent ? '' : '<button class="w-btn" type="button" data-action="send">Send answer</button>')
         : '<button class="w-btn" type="button" data-action="start">Start the interview</button>'}`;
+      if (silent && !S.notice) { S.notice = Core.errorText('no_voice'); S.noticeInfo = false; }
     } else if (S.mode === 'sending') {
       buttons = `<span class="w-wait"><i class="w-spin"></i> The AI is listening to your answer…</span>`;
     } else if (S.mode === 'timeup') {
@@ -417,6 +428,7 @@
     S.timer = null; S.beat = null; S.started = false;
     if (S.take) { URL.revokeObjectURL(S.take.url); S.take = null; }
     if (S.rec && S.rec.mr && S.rec.mr.state !== 'inactive') { try { S.rec.mr.stop(); } catch (error) { /* already stopped */ } }
+    if (S.rec) clearInterval(S.rec.sampler);
     S.rec = null;
     Mic.close();
   }
@@ -432,7 +444,9 @@
     catch (error) { setNotice('We could not start the recording on this device.'); return; }
     const chunks = [];
     recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
-    S.rec = { mr: recorder, chunks, startedAt: Date.now(), state: 'recording', mimeType: recorder.mimeType || mimeType || 'audio/webm' };
+    S.rec = { mr: recorder, chunks, startedAt: Date.now(), state: 'recording', mimeType: recorder.mimeType || mimeType || 'audio/webm', peak: 0 };
+    // The loudest moment of the recording tells whether any voice was captured (sampled on a timer, so it also works in a background tab).
+    S.rec.sampler = setInterval(() => { S.rec.peak = Math.max(S.rec.peak, Mic.readLevel(), Mic.level); }, 150);
     recorder.start(250);
     S.mode = 'recording';
     renderDock();
@@ -448,7 +462,8 @@
       const seconds = Math.min(Core.ANSWER_SECONDS, Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000)));
       rec.state = 'stopped';
       if (!blob.size) { S.mode = 'idle'; setNotice('Nothing was recorded. Please try again.'); renderDock(); return; }
-      S.take = { blob, url: URL.createObjectURL(blob), seconds };
+      clearInterval(rec.sampler);
+      S.take = { blob, url: URL.createObjectURL(blob), seconds, voiced: Core.hasVoice(Math.max(rec.peak, Mic.level)) };
       S.mode = 'recorded';
       renderDock();
     };
@@ -461,6 +476,7 @@
       try { S.rec.mr.stop(); } catch (error) { /* already stopped */ }
     }
     if (S.take) URL.revokeObjectURL(S.take.url);
+    if (S.rec) clearInterval(S.rec.sampler);
     S.take = null; S.rec = null;
     // Deleting does not reset the answer timer.
     S.mode = S.phase === 'interview' && Core.secondsLeftFrom(S.deadline, Date.now()) <= 0 ? 'timeup' : 'idle';
