@@ -12,7 +12,7 @@ const answerContext = (extra = {}) => ({ job: 'Product Designer', role: null, co
 
 test('the model is pinned to a version, never the moving latest alias', async () => {
   const { GEMINI_MODEL } = await gemini();
-  assert.equal(GEMINI_MODEL, 'gemini-3.8-flash');
+  assert.equal(GEMINI_MODEL, 'gemini-3.5-flash');
   assert.doesNotMatch(read('supabase/functions/session/gemini.ts'), /gemini-flash-latest|-latest/);
 });
 
@@ -108,7 +108,7 @@ test('responses wrapped in code fences or with thinking parts are still read; ga
 
 test('provider: key in a header, the busy first model falls back to the second, errors carry only the status', async () => {
   const { createGeminiProvider, MODEL_CHAIN } = await gemini();
-  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite']);
+  assert.deepEqual(MODEL_CHAIN.map(model => model.name), ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']);
   assert.ok(MODEL_CHAIN[0].timeoutMs < MODEL_CHAIN[1].timeoutMs, 'the first model gives way sooner than the last resort');
   assert.ok(MODEL_CHAIN.reduce((sum, model) => sum + model.timeoutMs, 0) <= 80_000, 'one round never takes more than about 80 s');
   const calls = [];
@@ -121,10 +121,10 @@ test('provider: key in a header, the busy first model falls back to the second, 
   const result = await provider.analyseAnswer(answerContext());
   assert.equal(result.transcript, 'Hello there');
   assert.equal(calls.length, 2);
-  assert.ok(calls[0].url.endsWith('models/gemini-3.8-flash:generateContent'));
-  assert.ok(calls[1].url.endsWith('models/gemini-3.5-flash:generateContent'));
-  assert.equal(calls[0].body.generationConfig.thinkingConfig.thinkingLevel, 'low');
-  assert.equal(calls[1].body.generationConfig.thinkingConfig.thinkingLevel, 'minimal');
+  assert.ok(calls[0].url.endsWith('models/gemini-3.5-flash:generateContent'));
+  assert.ok(calls[1].url.endsWith('models/gemini-3.8-flash:generateContent'));
+  assert.equal(calls[0].body.generationConfig.thinkingConfig.thinkingLevel, 'minimal');
+  assert.equal(calls[1].body.generationConfig.thinkingConfig.thinkingLevel, 'low');
   assert.doesNotMatch(calls[0].url, /key=/, 'the key is never in the address');
   assert.equal(calls[0].headers['x-goog-api-key'], 'test-key-123');
 

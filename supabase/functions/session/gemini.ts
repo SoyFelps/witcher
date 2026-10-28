@@ -4,15 +4,17 @@
 // createGeminiProvider talks to the network. Nothing the candidate said is ever logged or put into an error.
 import type { AiProvider, AnswerAnalysis, AnswerContext, Evaluation, EvaluationContext } from "./ai.ts";
 
-export const GEMINI_MODEL = "gemini-3.8-flash"; // pinned on purpose: never the moving "latest" alias
+export const GEMINI_MODEL = "gemini-3.5-flash"; // pinned on purpose: never the moving "latest" alias
 export interface ModelChoice { name: string; thinkingLevel: string; timeoutMs: number }
-// Tried in order. The first is the owner's choice; when Google says it is overloaded (or it times out) the next one
-// answers instead, so the candidate is not stuck. "Thinking" is kept low because a long pause ruins an interview;
-// each model accepts different levels (3.8 does not accept "minimal", 3.5 does), checked on 2026-10-28. The free tier
-// allows only 20 requests per day per model (and 3.7 shares the quota of 3.8), so every model in the chain adds room.
+// Tried in order; when Google says a model is overloaded (or it times out) the next one answers instead, so the
+// candidate is not stuck. "Thinking" is kept low because a long pause ruins an interview; each model accepts different
+// levels (3.8 does not accept "minimal", 3.5 does), checked on 2026-10-28. Comparison of 2026-10-28 on the same 8 clips:
+// 3.5-flash is as good as 3.8, about twice as fast (~2.5 s against ~4.6 s), and 3.8 invented an answer for 5 s of pure
+// silence while the other two reported no speech, so 3.8 is the second choice. The free tier allows only 20 requests
+// per day per model, so every model in the chain adds room.
 export const MODEL_CHAIN: ModelChoice[] = [
-  { name: GEMINI_MODEL, thinkingLevel: "low", timeoutMs: 15_000 }, // gives way quickly when it is slow or busy
-  { name: "gemini-3.5-flash", thinkingLevel: "minimal", timeoutMs: 30_000 }, // shares its daily quota with gemini-3.6-flash
+  { name: GEMINI_MODEL, thinkingLevel: "minimal", timeoutMs: 15_000 }, // gives way quickly when it is slow or busy; shares its daily quota with gemini-3.6-flash
+  { name: "gemini-3.8-flash", thinkingLevel: "low", timeoutMs: 30_000 }, // shares its daily quota with gemini-3.7-flash
   { name: "gemini-3.5-flash-lite", thinkingLevel: "minimal", timeoutMs: 30_000 }, // smaller and cheaper: the last resort
 ];
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
