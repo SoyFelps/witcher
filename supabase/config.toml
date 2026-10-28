@@ -1,0 +1,9 @@
+[functions.interviews-api]
+# Called by Pathway (server to server), not by a signed-in user, so there is no user JWT. The function checks
+# the shared x-witcher-api-key header itself and refuses every call without it.
+verify_jwt = false
+
+[functions.session]
+# Called by the candidate's browser with an e-mailed link and code, not by a signed-in user. The function checks the
+# link, the access code and its own short-lived session token on every action.
+verify_jwt = false
