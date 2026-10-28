@@ -328,12 +328,14 @@
       }
     } else if (S.mode === 'recording') {
       sub = interview ? sub : 'Recording… speak now.';
-      buttons = `<span class="w-rec" aria-live="off"><i></i> <span id="elapsed">${left}</span></span><button class="w-btn w-btn-ghost" type="button" data-action="delete">Delete</button><button class="w-btn" type="button" data-action="stop">Stop</button>`;
+      buttons = `<span class="w-rec" aria-live="off"><i></i> <span id="elapsed">${left}</span></span><button class="w-btn" type="button" data-action="stop">Stop</button>`; // nothing else while recording
     } else if (S.mode === 'recorded') {
       const player = S.take ? `<audio class="w-player" controls src="${esc(S.take.url)}"></audio>` : '';
       const timeIsUp = interview && Core.secondsLeftFrom(S.deadline, Date.now()) <= 0;
-      buttons = `${player}<button class="w-btn w-btn-ghost" type="button" data-action="delete">${interview ? 'Delete' : 'Record again'}</button>${timeIsUp
-        ? '<button class="w-btn w-btn-ghost" type="button" data-action="skip">Skip this question</button>' : ''}${interview
+      const second = timeIsUp
+        ? '<button class="w-btn w-btn-ghost" type="button" data-action="skip">Skip this question</button>'
+        : '<button class="w-btn w-btn-ghost" type="button" data-action="delete">Try again</button>';
+      buttons = `${player}${second}${interview
         ? '<button class="w-btn" type="button" data-action="send">Send answer</button>'
         : '<button class="w-btn" type="button" data-action="start">Start the interview</button>'}`;
     } else if (S.mode === 'sending') {

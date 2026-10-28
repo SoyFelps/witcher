@@ -105,6 +105,12 @@ test('interview page: files, order of scripts, no storage of audio, leave handli
   assert.match(js, /If you leave or refresh this page after the first question, the interview is cancelled/);
   assert.match(js, /Tell me about your career so far/);
   assert.match(js, /accentTokens/);
+  assert.ok(js.includes('data-action="delete">Try again</button>'), 'after Stop the button is called Try again');
+  assert.ok(!/>Delete</.test(js) && !js.includes("'Record again'"), 'no Delete button any more');
+  const recording = js.slice(js.indexOf("S.mode === 'recording') {"), js.indexOf("S.mode === 'recorded') {"));
+  assert.ok(recording.includes('data-action="stop"') && !recording.includes('data-action="delete"'), 'while recording the only button is Stop');
+  const recorded = js.slice(js.indexOf("S.mode === 'recorded') {"), js.indexOf("S.mode === 'sending') {"));
+  assert.ok(recorded.includes('timeIsUp') && recorded.includes('data-action="skip"') && recorded.includes('data-action="send"'), 'after time-up: Skip and Send');
   assert.match(js, /TEST_MAX_SECONDS/, 'the microphone test is limited to one minute');
   assert.match(js, /id="wave"/, 'there is a sound wave while recording');
   assert.ok(js.includes("addDivider('The interview starts now')"), 'the interview continues the same chat');
