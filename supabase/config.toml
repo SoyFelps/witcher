@@ -7,3 +7,8 @@ verify_jwt = false
 # Called by the candidate's browser with an e-mailed link and code, not by a signed-in user. The function checks the
 # link, the access code and its own short-lived session token on every action.
 verify_jwt = false
+
+[functions.deliver]
+# Called by a database job every minute (no user). It does nothing unless a notice is waiting, only talks to the
+# address and secret kept in the function's own settings, and Pathway checks the signature on what it sends.
+verify_jwt = false

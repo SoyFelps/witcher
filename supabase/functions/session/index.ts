@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { hashCode, randomToken, sha256Hex, timingSafeEqual } from "./crypto.ts";
 import { type AiProvider, stubProvider, type TranscriptLine } from "./ai.ts";
 import { createGeminiProvider } from "./gemini.ts";
+import { buildFinalEvaluation } from "./evaluate.ts";
 import {
   ABANDON_AFTER_SECONDS,
   ANSWER_SECONDS,
@@ -11,9 +12,7 @@ import {
   CODE_MAX_ATTEMPTS,
   CONSENT_VERSION,
   firstName,
-  impressionFor,
   isEnglish,
-  withLanguageNote,
   maskEmail,
   MAX_AUDIO_BASE64_CHARS,
   nextStep,
@@ -313,22 +312,15 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
 }
 
 async function finish(row: Row, languageFlag: boolean) {
-  const provider = aiProvider();
-  let evaluation = "The evaluation could not be generated automatically. Please review the transcript.";
-  let aiImpression: "positive" | "negative" | null = null; // stays null when the AI fails: an outage must not hurt the candidate
-  if (provider) {
-    try {
-      const { data, error } = await admin!.from("interview_messages").select("role,kind,body").eq("interview_id", row.id).order("seq");
-      if (error) throw error;
-      const result = await provider.evaluate({ job: row.job_title, role: row.role_title, company: row.company_name, lines: (data ?? []) as TranscriptLine[] });
-      evaluation = result.evaluation.slice(0, 6000);
-      aiImpression = result.impression;
-    } catch (error) {
-      console.error("AI evaluation failed:", error instanceof Error ? error.message : "unknown error");
-    }
-  }
+  const { data, error: linesError } = await admin!.from("interview_messages").select("role,kind,body").eq("interview_id", row.id).order("seq");
+  if (linesError) console.error("Reading the messages failed:", linesError.message);
+  const final = await buildFinalEvaluation(
+    linesError ? null : aiProvider(),
+    { job: row.job_title, role: row.role_title, company: row.company_name, lines: (data ?? []) as TranscriptLine[] },
+    languageFlag,
+  );
   const { error } = await admin!.from("interviews")
-    .update({ evaluation: withLanguageNote(evaluation, languageFlag), impression: impressionFor(languageFlag, aiImpression), notify_event: "completed", notify_state: "pending" })
+    .update({ evaluation: final.evaluation, impression: final.impression, notify_event: "completed", notify_state: "pending", notify_next_at: null })
     .eq("id", row.id);
   if (error) throw error;
 }

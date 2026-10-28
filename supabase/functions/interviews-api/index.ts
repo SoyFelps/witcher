@@ -3,6 +3,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { hashCode, randomCode, randomToken, sha256Hex, timingSafeEqual } from "./crypto.ts";
 import { buildInvitationEmail } from "./email.ts";
 import { canResend, INTERVIEW_VALID_DAYS, resendsLeft, validateCreate } from "./logic.ts";
+import { type AiProvider, stubProvider, type TranscriptLine } from "./ai.ts";
+import { createGeminiProvider } from "./gemini.ts";
+import { buildFinalEvaluation, canReevaluate } from "./evaluate.ts";
 
 // Server-to-server API used by Pathway (and later other clients). Every call needs the shared key in the
 // x-witcher-api-key header. The candidate never talks to this function: see the `session` function.
@@ -32,6 +35,15 @@ const TEST_MODE = Deno.env.get("WITCHER_TEST_MODE") === "1" && !projectUrl.inclu
 const admin = projectUrl && serviceKey
   ? createClient(projectUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
   : null;
+
+// Same choice as in the `session` function: Gemini (needs GEMINI_API_KEY); the offline stub only outside production.
+let gemini: AiProvider | null = null;
+function aiProvider(): AiProvider | null {
+  if ((Deno.env.get("AI_PROVIDER") || "gemini") === "stub") return projectUrl.includes(PRODUCTION_REF) ? null : stubProvider;
+  const apiKey = Deno.env.get("GEMINI_API_KEY") || "";
+  if (!apiKey) return null;
+  return gemini ??= createGeminiProvider({ apiKey });
+}
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -229,6 +241,45 @@ async function actionCancel(body: Record<string, unknown>) {
   return json(200, publicView(updated));
 }
 
+// Redoes an evaluation the AI could not write (see canReevaluate: a real evaluation is never replaced). It runs after the
+// answer, because Google can be slow; the client is told through the usual result notice, or can ask with `get`.
+async function actionReevaluate(body: Record<string, unknown>) {
+  const row = await findInterview(body);
+  if (!row) return fail(404, "not_found");
+  if (!canReevaluate(row as { status: string; evaluation: string | null; impression: string | null })) {
+    return fail(409, "not_reevaluable", { status: row.status });
+  }
+  const provider = aiProvider();
+  if (!provider) return fail(503, "ai_not_configured");
+  const now = new Date();
+  const { data: leased, error: leaseError } = await admin!.from("interviews")
+    .update({ evaluating_until: new Date(now.getTime() + 3 * 60_000).toISOString() })
+    .eq("id", row.id).or(`evaluating_until.is.null,evaluating_until.lt.${now.toISOString()}`).select("id").maybeSingle();
+  if (leaseError) throw leaseError;
+  if (!leased) return json(202, { reevaluating: true, alreadyRunning: true });
+
+  const work = (async () => {
+    const { data: lines, error } = await admin!.from("interview_messages").select("role,kind,body").eq("interview_id", row.id).order("seq");
+    if (error) throw error;
+    const final = await buildFinalEvaluation(
+      provider,
+      { job: row.job_title, role: row.role_title, company: row.company_name, lines: (lines ?? []) as TranscriptLine[] },
+      Boolean(row.language_flag),
+    );
+    // If the AI failed again, nothing is overwritten and no notice is sent: the client can simply ask once more later.
+    const update = final.aiFailed
+      ? { evaluating_until: null }
+      : { evaluation: final.evaluation, impression: final.impression, evaluating_until: null, notify_event: "completed", notify_state: "pending", notify_next_at: null, notify_attempts: 0 };
+    const { error: updateError } = await admin!.from("interviews").update(update).eq("id", row.id);
+    if (updateError) throw updateError;
+  })().catch((error) => console.error("reevaluate failed:", error instanceof Error ? error.message : "unknown error"));
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime && typeof runtime.waitUntil === "function") runtime.waitUntil(work);
+  else await work;
+  return json(202, { reevaluating: true });
+}
+
 async function actionDelete(body: Record<string, unknown>) {
   const row = await findInterview(body);
   if (!row) return json(200, { deleted: false }); // already gone: deleting is idempotent
@@ -249,6 +300,7 @@ Deno.serve(async (req) => {
       case "get": return await actionGet(body);
       case "resend": return await actionResend(body);
       case "cancel": return await actionCancel(body);
+      case "reevaluate": return await actionReevaluate(body);
       case "delete": return await actionDelete(body);
       default: return fail(400, "unknown_action");
     }
