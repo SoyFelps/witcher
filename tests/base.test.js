@@ -24,11 +24,12 @@ test('colours are defined once as design tokens in :root and used through var()'
   assert.deepEqual([...new Set(used.filter(name => !defined.has(name)))], [], 'every var(--token) is defined in :root');
 });
 
-test('supabase-config.js holds only the public key and points to production', () => {
+test('supabase-config.js holds only the public key and points to a Witcher project', () => {
   const source = read('supabase-config.js');
   assert.match(source, /window\.WITCHER_SUPABASE_CONFIG\s*=/);
   assert.match(source, /publishableKey:\s*'sb_publishable_[A-Za-z0-9_-]+'/);
-  assert.match(source, /https:\/\/iwpmsfoovppqnldciric\.supabase\.co/, 'committed file points to WitcherAPP (production)');
+  // Committed copy = production (iwpmsfoovppqnldciric); the local copy may point to staging (dvyeucfxwkibscooocby).
+  assert.match(source, /url:\s*'https:\/\/(iwpmsfoovppqnldciric|dvyeucfxwkibscooocby)\.supabase\.co'/, 'points to WitcherAPP or WitcherAPP-staging');
   assert.doesNotMatch(source, /sb_secret_|service_role\s*['"]?\s*[:=]\s*['"]eyJ|eyJhbGci/, 'no secret or JWT key in the browser config');
 });
 
