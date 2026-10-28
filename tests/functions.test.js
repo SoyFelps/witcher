@@ -237,3 +237,14 @@ test('greeting uses only the first word of the name', async () => {
   assert.equal(firstName('A'.repeat(100)).length, 40);
   assert.match(read('supabase/functions/session/index.ts'), /candidateFirstName: firstName\(row\.candidate_name\)/);
 });
+
+test('the evaluation says why a negative impression came from the language rule', async () => {
+  const { withLanguageNote, LANGUAGE_NOTE } = await flow();
+  assert.equal(withLanguageNote('Solid answers.', false), 'Solid answers.');
+  assert.equal(withLanguageNote('  Solid answers.  ', true), 'Solid answers.\n\n' + LANGUAGE_NOTE);
+  assert.match(LANGUAGE_NOTE, /not given in English/);
+  assert.match(LANGUAGE_NOTE, /automatically sets the impression to negative/);
+  assert.ok(withLanguageNote('x'.repeat(9000), true).length <= 6000, 'always fits the evaluation column');
+  assert.ok(withLanguageNote('x'.repeat(9000), true).endsWith(LANGUAGE_NOTE), 'the note is never cut off');
+  assert.ok(read('supabase/functions/session/index.ts').includes('evaluation: withLanguageNote(evaluation, languageFlag)'));
+});

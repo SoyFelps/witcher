@@ -13,6 +13,7 @@ import {
   firstName,
   impressionFor,
   isEnglish,
+  withLanguageNote,
   maskEmail,
   MAX_AUDIO_BASE64_CHARS,
   nextStep,
@@ -327,7 +328,7 @@ async function finish(row: Row, languageFlag: boolean) {
     }
   }
   const { error } = await admin!.from("interviews")
-    .update({ evaluation, impression: impressionFor(languageFlag, aiImpression), notify_event: "completed", notify_state: "pending" })
+    .update({ evaluation: withLanguageNote(evaluation, languageFlag), impression: impressionFor(languageFlag, aiImpression), notify_event: "completed", notify_state: "pending" })
     .eq("id", row.id);
   if (error) throw error;
 }

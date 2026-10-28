@@ -52,6 +52,17 @@ export function impressionFor(languageFlag: boolean, aiImpression: "positive" | 
   return languageFlag ? "negative" : aiImpression; // null = the AI could not evaluate: no badge, never a made-up negative
 }
 
+export const LANGUAGE_NOTE = "Note: at least one answer was not given in English (the language of this job), which automatically sets the impression to negative.";
+
+/**
+ * The evaluation text for the hiring team. When the language rule forced a negative impression, the reason is added in
+ * plain words, so nobody has to guess why an evaluation of ordinary answers carries a negative badge.
+ */
+export function withLanguageNote(evaluation: string, languageFlag: boolean): string {
+  const text = String(evaluation ?? "").trim().slice(0, 5800); // leaves room for the note inside the 6000 characters of the column
+  return languageFlag ? text + "\n\n" + LANGUAGE_NOTE : text;
+}
+
 /** `a***@example.com`: enough to recognise the address, not enough to reveal it. */
 export function maskEmail(email: string): string {
   const at = email.lastIndexOf("@");
