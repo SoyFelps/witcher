@@ -128,6 +128,15 @@ test('interview page: files, order of scripts, no storage of audio, leave handli
   assert.doesNotMatch(js, /action: 'answer'[\s\S]{0,400}localStorage/);
 });
 
+test('a late presence signal never replaces the screen the person is on', () => {
+  const js = read('interview.js');
+  const beat = js.slice(js.indexOf("action: 'heartbeat'"), js.indexOf('}, HEARTBEAT_MS)'));
+  const ignoreStale = beat.indexOf("if (!S.started || S.screen !== 'chat') return;");
+  assert.ok(ignoreStale > 0, 'results that arrive after the interview ended are ignored');
+  assert.ok(ignoreStale < beat.indexOf("result.status === 401) {"), 'the check comes before any screen is replaced');
+  assert.ok(beat.includes("result.status === 401 && S.mode === 'sending'"), 'a 401 while the last answer is being sent is not an error');
+});
+
 test('the stylesheet and script versions agree across pages', () => {
   const versions = new Set();
   for (const file of ['index.html', 'interview.html']) for (const match of read(file).matchAll(/\?v=([\w-]+)/g)) versions.add(match[1]);

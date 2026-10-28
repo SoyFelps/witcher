@@ -411,6 +411,10 @@
     S.timer = setInterval(tick, 250);
     S.beat = setInterval(async () => {
       const result = await api({ action: 'heartbeat', sessionToken: S.token });
+      // A late answer to a signal sent before the interview ended must never replace the screen the person is on now
+      // (the thank-you screen, for example). While the last answer is being sent, a 401 only means the server just closed it.
+      if (!S.started || S.screen !== 'chat') return;
+      if (result.status === 401 && S.mode === 'sending') return;
       if (result.status === 401) { showMessage('Your session ended', 'The interview can no longer continue. Please contact the hiring team.'); return; }
       if (result.status === 200 && result.json.state && result.json.state !== 'in_progress') {
         if (result.json.state === 'completed') showDone(); else showState(result.json.state);
