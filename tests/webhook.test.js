@@ -121,3 +121,10 @@ test('the webhook migration is additive, keeps the new table closed to browsers 
 test('the function settings keep the deliver function open to the database job (no JWT)', () => {
   assert.match(read('supabase/config.toml'), /\[functions\.deliver\][^[]*verify_jwt = false/);
 });
+
+test('get tells the client whether a re-evaluation is running, so it can show "being written" and offer the button again only after a real failure', () => {
+  const source = read('supabase/functions/interviews-api/index.ts');
+  assert.ok(source.includes('evaluating_until,q_index,phase'), 'the lease column is read');
+  assert.ok(source.includes('evaluating: Boolean(row.evaluating_until) && Date.parse(row.evaluating_until) > Date.now()'));
+  assert.ok(source.includes('{ evaluating_until: null }'), 'the lease is released when the AI fails again');
+});
