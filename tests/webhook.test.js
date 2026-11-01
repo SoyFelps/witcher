@@ -136,3 +136,11 @@ test('get tells where a candidate is, or was when they left: question number, qu
   assert.ok(source.includes('questionNumber: Number(row.q_index) + 1') && source.includes('totalQuestions: questions.length'));
   assert.ok(source.includes('questionText: row.phase === "question" ? String(questions[row.q_index] ?? "") : null'), 'a follow-up has no saved text, so none is sent');
 });
+
+test('every interview is erased one year after it was created, with its transcript (retention rule of 2026-11-01)', () => {
+  const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261101130000_purge_after_one_year.sql'), 'utf8');
+  assert.ok(sql.includes("delete from public.interviews where created_at < now() - interval '1 year'"));
+  assert.ok(sql.includes("cron.schedule('witcher-purge'") && sql.includes('revoke all on function public.witcher_purge_old()'));
+  const core = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261028115728_core_interviews.sql'), 'utf8');
+  assert.ok(core.includes('references public.interviews (id) on delete cascade'), 'the transcript goes with the interview');
+});
