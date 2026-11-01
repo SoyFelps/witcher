@@ -72,7 +72,7 @@ async function authorised(req: Request): Promise<boolean> {
 }
 
 const INTERVIEW_COLUMNS =
-  "id,external_id,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,link_id,status,invite_count,last_invite_at,expires_at,started_at,last_seen_at,completed_at,cancelled_at,abandoned_at,language_flag,evaluation,impression,evaluating_until,q_index,phase";
+  "id,external_id,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,link_id,status,invite_count,last_invite_at,expires_at,started_at,last_seen_at,completed_at,cancelled_at,abandoned_at,language_flag,evaluation,impression,evaluating_until,q_index,phase,questions";
 
 // deno-lint-ignore no-explicit-any
 type Row = Record<string, any>;
@@ -215,6 +215,17 @@ async function actionGet(body: Record<string, unknown>) {
   // `evaluating` is true while a re-evaluation is running (see actionReevaluate), so the client can show "being written" and
   // offer the button again only when the AI really failed.
   const view: Record<string, unknown> = { ...publicView(row), lastSeenAt: row.last_seen_at, evaluating: Boolean(row.evaluating_until) && Date.parse(row.evaluating_until) > Date.now() };
+  if (row.status === "abandoned" || row.status === "in_progress") {
+    // Where the candidate is (or was when they left): the question number, whether it was the question or its follow-up, and the
+    // text of the question. The follow-up text is not kept (the conversation of a left interview is deleted), only that it was one.
+    const questions = Array.isArray(row.questions) ? row.questions : [];
+    view.progress = {
+      questionNumber: Number(row.q_index) + 1,
+      totalQuestions: questions.length,
+      phase: row.phase,
+      questionText: row.phase === "question" ? String(questions[row.q_index] ?? "") : null,
+    };
+  }
   if (row.status === "completed") {
     const { data: messages, error } = await admin!.from("interview_messages")
       .select("seq,role,kind,body,audio_seconds,answer_status,created_at").eq("interview_id", row.id).order("seq");

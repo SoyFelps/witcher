@@ -128,3 +128,11 @@ test('get tells the client whether a re-evaluation is running, so it can show "b
   assert.ok(source.includes('evaluating: Boolean(row.evaluating_until) && Date.parse(row.evaluating_until) > Date.now()'));
   assert.ok(source.includes('{ evaluating_until: null }'), 'the lease is released when the AI fails again');
 });
+
+test('get tells where a candidate is, or was when they left: question number, question or follow-up, and the question text', () => {
+  const source = read('supabase/functions/interviews-api/index.ts');
+  assert.ok(source.includes('evaluating_until,q_index,phase,questions";'), 'the questions copy is read');
+  assert.ok(source.includes('row.status === "abandoned" || row.status === "in_progress"'));
+  assert.ok(source.includes('questionNumber: Number(row.q_index) + 1') && source.includes('totalQuestions: questions.length'));
+  assert.ok(source.includes('questionText: row.phase === "question" ? String(questions[row.q_index] ?? "") : null'), 'a follow-up has no saved text, so none is sent');
+});
