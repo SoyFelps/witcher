@@ -2,13 +2,13 @@
 // `interviews-api` function (the client asks to redo an evaluation the AI could not write). This file is copied into
 // each function folder; tests/functions.test.js checks the copies are identical. No Deno or network access of its own.
 import type { AiProvider, TranscriptLine } from "./ai.ts";
-import { impressionFor, withLanguageNote } from "./flow.ts";
+import { impressionFor, tooManySkipped, withLanguageNote } from "./flow.ts";
 
 export const EVALUATION_FAILED_TEXT = "The evaluation could not be generated automatically. Please review the transcript.";
 
 export interface FinalEvaluation {
   evaluation: string; // already carries the language note when it applies
-  impression: "positive" | "negative" | null; // null when the AI could not evaluate: an outage must not hurt the candidate
+  impression: "positive" | "mixed" | "negative" | null; // null when the AI could not evaluate: an outage must not hurt the candidate
   aiFailed: boolean;
 }
 
@@ -18,7 +18,7 @@ export async function buildFinalEvaluation(
   languageFlag: boolean,
 ): Promise<FinalEvaluation> {
   let evaluation = EVALUATION_FAILED_TEXT;
-  let aiImpression: "positive" | "negative" | null = null;
+  let aiImpression: "positive" | "mixed" | "negative" | null = null;
   let aiFailed = true;
   if (provider) {
     try {
@@ -30,7 +30,8 @@ export async function buildFinalEvaluation(
       console.error("AI evaluation failed:", error instanceof Error ? error.message : "unknown error");
     }
   }
-  return { evaluation: withLanguageNote(evaluation, languageFlag), impression: impressionFor(languageFlag, aiImpression), aiFailed };
+  const skipped = tooManySkipped(context.lines); // fixed rule, not left to the AI: more than 32% of the answers skipped = negative
+  return { evaluation: withLanguageNote(evaluation, languageFlag, skipped), impression: impressionFor(languageFlag, aiImpression, skipped), aiFailed };
 }
 
 /**

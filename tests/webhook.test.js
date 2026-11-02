@@ -144,3 +144,18 @@ test('every interview is erased one year after it was created, with its transcri
   const core = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20261028115728_core_interviews.sql'), 'utf8');
   assert.ok(core.includes('references public.interviews (id) on delete cascade'), 'the transcript goes with the interview');
 });
+
+test('final evaluation: too many skipped answers force negative even when the AI says positive or fails', async () => {
+  const { buildFinalEvaluation } = await evaluate();
+  const { SKIPPED_NOTE } = await load('supabase/functions/session/flow.ts');
+  const lines = [{ role: 'ai', kind: 'question', body: 'Q1' }, { role: 'candidate', kind: 'answer', body: 'A strong answer with details.' }, { role: 'ai', kind: 'question', body: 'Q2' }, { role: 'candidate', kind: 'answer', body: null }];
+  const context = { job: 'Cook', role: null, company: 'Acme', lines };
+  const good = { evaluate: async () => ({ evaluation: 'Excellent first answer.', impression: 'positive' }) };
+  const result = await buildFinalEvaluation(good, context, false);
+  assert.equal(result.impression, 'negative');
+  assert.ok(result.evaluation.endsWith(SKIPPED_NOTE));
+  const broken = { evaluate: async () => { throw new Error('gemini_http_503'); } };
+  assert.equal((await buildFinalEvaluation(broken, context, false)).impression, 'negative', 'a fixed rule does not depend on the AI');
+  const fine = { ...context, lines: [...lines.slice(0, 2), { role: 'ai', kind: 'question', body: 'Q2' }, { role: 'candidate', kind: 'answer', body: 'Another good answer.' }] };
+  assert.equal((await buildFinalEvaluation(good, fine, false)).impression, 'positive', 'nothing skipped: the AI decides');
+});

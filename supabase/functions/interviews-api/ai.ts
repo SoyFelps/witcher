@@ -29,7 +29,7 @@ export interface EvaluationContext {
   lines: TranscriptLine[];
 }
 
-export interface Evaluation { evaluation: string; impression: "positive" | "negative" }
+export interface Evaluation { evaluation: string; impression: "positive" | "mixed" | "negative" }
 
 export interface AiProvider {
   analyseAnswer(context: AnswerContext): Promise<AnswerAnalysis>;

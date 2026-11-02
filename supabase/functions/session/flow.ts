@@ -47,20 +47,36 @@ export function isEnglish(language: string | null | undefined): boolean {
   return code === "" || code === "und" || code === "unknown" || code === "en" || code.startsWith("en-");
 }
 
-/** An answer in another language always means a negative impression (owner decision 2026-10-27). */
-export function impressionFor(languageFlag: boolean, aiImpression: "positive" | "negative" | null): "positive" | "negative" | null {
-  return languageFlag ? "negative" : aiImpression; // null = the AI could not evaluate: no badge, never a made-up negative
+/** More than this share of the candidate's answers skipped always means a negative impression (owner decision 2026-11-02). */
+export const SKIP_LIMIT = 0.32;
+
+/** Share of the candidate's answers that were skipped (a skipped answer has no text; "[No speech detected]" is text, not a skip). */
+export function skippedShare(lines: { role: string; body: string | null }[]): number {
+  const answers = lines.filter((line) => line.role === "candidate");
+  if (answers.length === 0) return 0;
+  return answers.filter((line) => !line.body).length / answers.length;
+}
+
+export function tooManySkipped(lines: { role: string; body: string | null }[]): boolean {
+  return skippedShare(lines) > SKIP_LIMIT;
+}
+
+/** An answer in another language (owner decision 2026-10-27) or too many skipped answers (2026-11-02) always mean a negative impression. */
+export function impressionFor(languageFlag: boolean, aiImpression: "positive" | "mixed" | "negative" | null, skippedTooMuch = false): "positive" | "mixed" | "negative" | null {
+  return languageFlag || skippedTooMuch ? "negative" : aiImpression; // null = the AI could not evaluate: no badge, never a made-up negative
 }
 
 export const LANGUAGE_NOTE = "Note: at least one answer was not given in English (the language of this job), which automatically sets the impression to negative.";
+export const SKIPPED_NOTE = "Note: more than 32% of the answers were skipped, which automatically sets the impression to negative.";
 
 /**
- * The evaluation text for the hiring team. When the language rule forced a negative impression, the reason is added in
- * plain words, so nobody has to guess why an evaluation of ordinary answers carries a negative badge.
+ * The evaluation text for the hiring team. When a fixed rule (language, skipped answers) forced a negative impression, the
+ * reason is added in plain words, so nobody has to guess why an evaluation of ordinary answers carries a negative badge.
  */
-export function withLanguageNote(evaluation: string, languageFlag: boolean): string {
-  const text = String(evaluation ?? "").trim().slice(0, 5800); // leaves room for the note inside the 6000 characters of the column
-  return languageFlag ? text + "\n\n" + LANGUAGE_NOTE : text;
+export function withLanguageNote(evaluation: string, languageFlag: boolean, skippedTooMuch = false): string {
+  const text = String(evaluation ?? "").trim().slice(0, 5600); // leaves room for both notes inside the 6000 characters of the column
+  const notes = [skippedTooMuch ? SKIPPED_NOTE : "", languageFlag ? LANGUAGE_NOTE : ""].filter(Boolean);
+  return notes.length ? text + "\n\n" + notes.join("\n\n") : text;
 }
 
 /** `a***@example.com`: enough to recognise the address, not enough to reveal it. */

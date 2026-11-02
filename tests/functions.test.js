@@ -136,6 +136,8 @@ test('an answer in another language always gives a negative impression; unknown 
   assert.equal(impressionFor(true, 'positive'), 'negative');
   assert.equal(impressionFor(false, 'positive'), 'positive');
   assert.equal(impressionFor(false, 'negative'), 'negative');
+  assert.equal(impressionFor(false, 'mixed'), 'mixed', 'mixed passes through when English');
+  assert.equal(impressionFor(true, 'mixed'), 'negative', 'another language overrides mixed too');
   assert.equal(impressionFor(false, null), null, 'an AI failure never invents a negative impression');
   assert.equal(impressionFor(true, null), 'negative', 'another language is still negative');
 });
@@ -246,6 +248,28 @@ test('the evaluation says why a negative impression came from the language rule'
   assert.match(LANGUAGE_NOTE, /automatically sets the impression to negative/);
   assert.ok(withLanguageNote('x'.repeat(9000), true).length <= 6000, 'always fits the evaluation column');
   assert.ok(withLanguageNote('x'.repeat(9000), true).endsWith(LANGUAGE_NOTE), 'the note is never cut off');
-  assert.ok(read('supabase/functions/session/evaluate.ts').includes('evaluation: withLanguageNote(evaluation, languageFlag)'));
+  assert.ok(read('supabase/functions/session/evaluate.ts').includes('evaluation: withLanguageNote(evaluation, languageFlag, skipped)'));
   assert.ok(read('supabase/functions/session/index.ts').includes('buildFinalEvaluation('), 'the interview uses the shared final evaluation');
+});
+
+test('more than 32% of the candidate answers skipped always gives a negative impression, decided by the code and not by the AI', async () => {
+  const { skippedShare, tooManySkipped, impressionFor, withLanguageNote, SKIPPED_NOTE, LANGUAGE_NOTE, SKIP_LIMIT } = await flow();
+  const answer = (body) => ({ role: 'candidate', body });
+  const ai = { role: 'ai', body: 'A question' };
+  assert.equal(SKIP_LIMIT, 0.32);
+  assert.equal(skippedShare([]), 0);
+  assert.equal(skippedShare([ai, ai]), 0, 'AI lines never count');
+  assert.ok(!tooManySkipped([answer('a'), answer('b'), answer('c'), answer(null)]), '1 of 4 = 25%');
+  assert.ok(tooManySkipped([answer('a'), answer('b'), answer(null)]), '1 of 3 = 33%');
+  assert.ok(tooManySkipped([answer('a'), answer(null)]), '1 of 2 = 50%');
+  assert.ok(!tooManySkipped([answer('a'), answer('b'), answer('c'), answer('d'), answer(null)]), '1 of 5 = 20%');
+  assert.ok(tooManySkipped([answer('a'), answer('b'), answer('c'), answer('d'), answer(null), answer(null)]), '2 of 6 = 33%');
+  assert.ok(!tooManySkipped([answer('[No speech detected]'), answer('a')]), 'no speech detected is text, not a skip');
+  assert.equal(impressionFor(false, 'positive', true), 'negative');
+  assert.equal(impressionFor(false, null, true), 'negative', 'even when the AI failed');
+  assert.equal(impressionFor(false, 'mixed', false), 'mixed');
+  assert.equal(withLanguageNote('Fine.', false, true), 'Fine.\n\n' + SKIPPED_NOTE);
+  assert.equal(withLanguageNote('Fine.', true, true), 'Fine.\n\n' + SKIPPED_NOTE + '\n\n' + LANGUAGE_NOTE);
+  assert.ok(withLanguageNote('x'.repeat(9000), true, true).length <= 6000, 'both notes fit the column');
+  assert.match(SKIPPED_NOTE, /more than 32%/);
 });

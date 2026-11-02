@@ -165,3 +165,21 @@ test('the session function chooses the provider by configuration and never uses 
   assert.match(index, /choice === "stub"[\s\S]{0,160}PRODUCTION_REF/);
   assert.doesNotMatch(read('supabase/functions/session/gemini.ts'), /console\./, 'the Gemini code never logs');
 });
+
+test('three impression levels: mixed is accepted, the prompt defines all three and tells the AI not to hide behind mixed', async () => {
+  const { parseEvaluationResponse, buildEvaluationRequest } = await gemini();
+  assert.deepEqual(parseEvaluationResponse(reply({ evaluation: 'Some concrete, some vague.', impression: 'mixed' })), { evaluation: 'Some concrete, some vague.', impression: 'mixed' });
+  const source = fs.readFileSync(path.join(root, 'supabase/functions/session/gemini.ts'), 'utf8');
+  assert.ok(source.includes('enum: ["positive", "mixed", "negative"]'));
+  for (const level of ['"positive":', '"mixed":', '"negative":']) assert.ok(source.includes(level), level + ' is defined in the prompt');
+  assert.match(source, /Never choose "mixed" just to avoid deciding/);
+  assert.match(source, /Do not praise answers that were only on-topic/);
+  assert.match(source, /Judge self-praise the way an experienced recruiter/, 'self-praise is judged by weight and tone, not by counting answers');
+  assert.ok(!/more than half/.test(source), 'no fixed percentage rule');
+  assert.match(source, /does NOT lower the impression/, 'pride in good work does not hurt a strong interview');
+  assert.match(source, /extravagant or presumptuous claims/, 'over-the-top boasting is what makes self-praise negative');
+  assert.match(source, /mostly about the candidate instead of the work/, 'self-centred answers with almost no job detail are negative even without absurd claims');
+  assert.match(source, /at most one answer contains real job detail/);
+  assert.match(source, /Never mention or infer [^.]*accent[^.]*personality/, 'fairness rules stay, personality is not judged');
+  assert.equal(typeof buildEvaluationRequest, 'function');
+});
