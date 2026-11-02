@@ -2,7 +2,7 @@
 
 AI interviews for hiring teams (working name). A candidate receives a link and a code by e-mail, gives consent, answers a few questions out loud, and the hiring team gets a short written evaluation and the transcript. Audio is never stored. It works on its own and plugs into [Pathway](https://github.com/SoyFelps/pathway).
 
-**Status:** early setup. Only the static site skeleton exists so far.
+**Status:** in production. The candidate page (`interview.html`), the database and three Edge Functions (`interviews-api`, `session`, `deliver`) are live, and the Pathway integration works end to end. Invitations only reach the owner's own address until a sending domain is verified.
 
 ## Run locally
 
@@ -20,4 +20,4 @@ node --test tests/*.test.js
 
 ## Backend
 
-Supabase (Postgres, Auth, Edge Functions). Two projects: production `WitcherAPP` and `WitcherAPP-staging`. `supabase-config.js` holds only the public (publishable) key. Secrets (Gemini, Resend, shared Pathway keys) live only in the Supabase dashboard and are never committed.
+Supabase (Postgres, Edge Functions, pg_cron). Interviews are erased automatically one year after they were created. Two projects: production `WitcherAPP` and `WitcherAPP-staging`. `supabase-config.js` holds only the public (publishable) key. Secrets (Gemini, Resend, shared Pathway keys) live only in the Supabase dashboard and are never committed.
