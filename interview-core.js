@@ -64,16 +64,17 @@
 
   // The page background the colours must stand out from, and the least contrast a button edge or icon needs (WCAG, non-text).
   const PAGE_BACKGROUND = '#f8f8f8';
-  const EDGE_MIN_CONTRAST = 3;
+  const EDGE_MIN_CONTRAST = 2; // a subtle outline for the buttons
+  const STRONG_MIN_CONTRAST = 3; // focus rings, ticks, the spinner and the tints (WCAG, non-text)
 
   /**
-   * The colour of borders, focus rings and ticks: the brand colour itself when it already stands out from the page, otherwise
-   * the same colour darkened just enough to do so (white becomes a mid grey). A colour that already works is returned unchanged.
+   * A colour that stands out from the page: the brand colour itself when it already does, otherwise the same colour darkened just
+   * enough to (white becomes a grey). `min` is the contrast to reach: the subtle button outline (2) or the stronger colour (3).
    */
-  function edgeColor(hex) {
+  function edgeColor(hex, min = EDGE_MIN_CONTRAST) {
     if (!isValidColor(hex)) return null;
     let edge = hex;
-    for (let ratio = 1; contrastRatio(edge, PAGE_BACKGROUND) < EDGE_MIN_CONTRAST && ratio > 0; ) {
+    for (let ratio = 1; contrastRatio(edge, PAGE_BACKGROUND) < min && ratio > 0; ) {
       ratio = Math.max(0, ratio - 0.05);
       edge = mixHex(hex, '#17251e', ratio);
     }
@@ -89,14 +90,15 @@
     if (!isValidColor(hex)) return null;
     const white = '#ffffff';
     const edge = edgeColor(hex);
-    const base = edge; // equal to the brand colour whenever that colour is already visible, so such a colour looks exactly as before
+    const strong = edgeColor(hex, STRONG_MIN_CONTRAST);
+    const base = strong; // equal to the brand colour whenever that colour is already visible, so such a colour looks exactly as before
     const soft = mixHex(base, white, 0.12);
     let ink = base;
     for (let ratio = 1; contrastRatio(ink, soft) < 4.5 && ratio > 0; ) {
       ratio = Math.max(0, ratio - 0.1);
       ink = mixHex(base, '#17251e', ratio);
     }
-    return { accent: hex, edge, onAccent: contrastText(hex), soft, mid: mixHex(base, white, 0.22), line: mixHex(base, white, 0.4), ink };
+    return { accent: hex, edge, strong, onAccent: contrastText(hex), soft, mid: mixHex(base, white, 0.22), line: mixHex(base, white, 0.4), ink };
   }
 
   /** First format the browser can record in, from `isSupported(mime)` (MediaRecorder.isTypeSupported). */

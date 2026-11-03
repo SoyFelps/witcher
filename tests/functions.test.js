@@ -281,7 +281,8 @@ test('the invitation e-mail button stays visible and readable for white, pale an
   const ratio = (a, b) => { const [h, l] = [lum(a), lum(b)].sort((x, y) => y - x); return (h + 0.05) / (l + 0.05); };
   for (const color of ['#ffffff', '#fefefe', '#ffd400', '#fff8dc', '#1e94a4', '#315f4a', '#000000']) {
     const colors = mailColors(color);
-    assert.ok(ratio(colors.edge, '#ffffff') >= 3, color + ': edge visible on the white e-mail');
+    assert.ok(ratio(colors.edge, '#ffffff') >= 2, color + ': button outline visible on the white e-mail');
+    assert.ok(ratio(colors.strong, '#ffffff') >= 3, color + ': label text visible');
     // same text rule as the page (white on dark and mid colours, near-black on light ones); mid colours such as #1e94a4 are about 3.6:1 and stay as approved
     assert.ok(ratio(colors.text, color) >= 3, color + ': button text readable on the fill');
     const html = buildInvitationEmail({ ...base, brandColor: color }).html;

@@ -170,7 +170,9 @@ test('light company colours keep their fill but always get an edge that stands o
   for (const color of ['#ffffff', '#fefefe', '#f5f5f5', '#fff8dc', '#ffd400', '#d2f37a', '#e8f0ff']) {
     const tokens = Core.accentTokens(color);
     assert.equal(tokens.accent, color, color + ': the fill stays the company colour');
-    assert.ok(Core.contrastRatio(tokens.edge, page) >= 3, color + ': edge visible on the page');
+    assert.ok(Core.contrastRatio(tokens.edge, page) >= 2, color + ': the button outline is visible on the page');
+    assert.ok(Core.contrastRatio(tokens.edge, page) < 3 || color === '#000000', color + ': and stays subtle');
+    assert.ok(Core.contrastRatio(tokens.strong, page) >= 3, color + ': focus ring and tick are strongly visible');
     assert.ok(Core.contrastRatio(tokens.onAccent, tokens.accent) >= 4.5, color + ': text on the fill');
     assert.ok(Core.contrastRatio(tokens.ink, tokens.soft) >= 4.5, color + ': ink on the tint');
     assert.notEqual(tokens.soft, '#ffffff', color + ': the soft tint is not white on white');
@@ -180,11 +182,13 @@ test('light company colours keep their fill but always get an edge that stands o
   for (const color of ['#315f4a', '#1e94a4', '#3556c8', '#000000', '#c2410c']) {
     const tokens = Core.accentTokens(color);
     assert.equal(tokens.edge, color, color + ': no change for a colour that already works');
+    assert.equal(tokens.strong, color);
     assert.equal(tokens.soft, Core.mixHex(color, '#ffffff', 0.12));
   }
   assert.equal(Core.edgeColor('red'), null);
   const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
   assert.match(css, /\.w-btn\{[^}]*border:1px solid var\(--accent-edge\)/);
-  assert.match(css, /accent-color:var\(--accent-edge\)/);
+  assert.match(css, /accent-color:var\(--accent-strong\)/);
+  assert.match(css, /outline:2px solid var\(--accent-strong\)/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8'), /--accent-edge/);
 });

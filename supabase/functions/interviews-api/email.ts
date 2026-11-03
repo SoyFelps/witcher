@@ -46,13 +46,18 @@ function mix(a: string, b: string, ratio: number): string {
   return "#" + [0, 1, 2].map((i) => Math.round(part(a, i) * ratio + part(b, i) * (1 - ratio)).toString(16).padStart(2, "0")).join("");
 }
 
-export function mailColors(accent: string): { accent: string; text: string; edge: string } {
-  let edge = accent;
-  for (let ratio = 1; contrast(edge, MAIL_PAGE) < 3 && ratio > 0;) {
+// edge: a subtle outline for the button (contrast 2:1); strong: for small text such as the label above the title (contrast 3:1).
+function visibleOnPage(accent: string, min: number): string {
+  let color = accent;
+  for (let ratio = 1; contrast(color, MAIL_PAGE) < min && ratio > 0;) {
     ratio = Math.max(0, ratio - 0.05);
-    edge = mix(accent, MAIL_INK, ratio);
+    color = mix(accent, MAIL_INK, ratio);
   }
-  return { accent, text: luminance(accent) > 0.4 ? MAIL_INK : "#ffffff", edge };
+  return color;
+}
+
+export function mailColors(accent: string): { accent: string; text: string; edge: string; strong: string } {
+  return { accent, text: luminance(accent) > 0.4 ? MAIL_INK : "#ffffff", edge: visibleOnPage(accent, 2), strong: visibleOnPage(accent, 3) };
 }
 
 export function escapeHtml(value: string): string {
@@ -112,7 +117,7 @@ export function buildInvitationEmail(input: InvitationInput): InvitationEmail {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e9e4;border-radius:12px;">
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${colors.edge};font-weight:700;">${input.isResend ? "Interview reminder" : "Interview invitation"}</p>
+                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${colors.strong};font-weight:700;">${input.isResend ? "Interview reminder" : "Interview invitation"}</p>
                 <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">Hi ${n}, you are invited to an interview.</h1>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;"><strong>${c}</strong> invites you to a short interview for <strong>${j}</strong>. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.</p>
                 <p style="margin:0 0 8px;font-size:13px;color:#748178;">Your access code${input.isResend ? " (replaces any earlier code)" : ""}</p>

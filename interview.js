@@ -186,7 +186,7 @@
     const style = document.documentElement.style;
     if (tokens) {
       // Everything on the page that is tinted comes from the company's colour (a variation of it), not from the Witcher green.
-      style.setProperty('--accent', tokens.accent); style.setProperty('--accent-edge', tokens.edge); style.setProperty('--on-accent', tokens.onAccent);
+      style.setProperty('--accent', tokens.accent); style.setProperty('--accent-edge', tokens.edge); style.setProperty('--accent-strong', tokens.strong); style.setProperty('--on-accent', tokens.onAccent);
       style.setProperty('--accent-soft', tokens.soft); style.setProperty('--accent-mid', tokens.mid);
       style.setProperty('--accent-line', tokens.line); style.setProperty('--accent-ink', tokens.ink);
     }
