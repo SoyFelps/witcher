@@ -9,6 +9,7 @@
   const esc = Core.escapeHtml;
   const root = document.getElementById('app');
   const HEARTBEAT_MS = 15000;
+  const STOP_WAIT_MS = 2500; // how long to wait for the recorder to say it stopped
   const DISCLAIMER = "The AI does not determine who passes or fails in the selection process; it only facilitates the recruiter's role in choosing the best candidate for the position. The company is responsible for reviewing your responses.";
   const TEST_QUESTION = 'Tell me about your career so far.';
 
@@ -37,9 +38,10 @@
 
   // ---------------------------------------------------------------------------------------------- microphone
   const Mic = {
-    stream: null, context: null, analyser: null, frame: 0, level: 0,
+    stream: null, context: null, analyser: null, frame: 0, level: 0, muted: false,
     async open() {
       if (this.stream && this.stream.getTracks().some(track => track.readyState === 'live')) return;
+      this.close(); // a dead stream is released completely (meter, audio context) before a new one is opened
       const audio = S.deviceId ? { deviceId: { exact: S.deviceId } } : true;
       this.stream = await navigator.mediaDevices.getUserMedia({ audio });
       try {
@@ -48,13 +50,24 @@
         const live = this.stream.getAudioTracks()[0] && this.stream.getAudioTracks()[0].getSettings().deviceId;
         if (!S.deviceId && live) S.deviceId = live;
       } catch (error) { /* the list is optional */ }
+      this.watch();
       this.meter();
     },
     close() {
-      cancelAnimationFrame(this.frame);
+      cancelAnimationFrame(this.frame); this.frame = 0;
       if (this.stream) this.stream.getTracks().forEach(track => track.stop());
       if (this.context) { try { this.context.close(); } catch (error) { /* already closed */ } }
-      this.stream = null; this.context = null; this.analyser = null;
+      this.stream = null; this.context = null; this.analyser = null; this.muted = false; this.level = 0;
+    },
+    // The phone can mute or take the microphone away (another app, a call): the page must say so instead of showing "ready".
+    watch() {
+      const stream = this.stream;
+      const track = stream && stream.getAudioTracks()[0];
+      if (!track) return;
+      this.muted = !!track.muted;
+      track.addEventListener('mute', () => { if (this.stream !== stream) return; this.muted = true; onMicTrouble('muted'); });
+      track.addEventListener('unmute', () => { if (this.stream !== stream) return; this.muted = false; onMicTrouble('back'); });
+      track.addEventListener('ended', () => { if (this.stream !== stream) return; this.close(); onMicTrouble('ended'); });
     },
     readLevel() {
       if (!this.analyser) return 0;
@@ -65,16 +78,23 @@
       return Math.min(1, peak / 64);
     },
     meter() {
+      if (this.analyser) { // already running: never open a second audio context or a second drawing loop
+        if (this.context && this.context.state === 'suspended') { try { this.context.resume(); } catch (error) { /* only a nicety */ } }
+        return;
+      }
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return;
+        cancelAnimationFrame(this.frame);
         this.context = new AudioContextClass();
         this.analyser = this.context.createAnalyser();
         this.analyser.fftSize = 256;
         this.context.createMediaStreamSource(this.stream).connect(this.analyser);
         const data = new Uint8Array(this.analyser.frequencyBinCount);
+        const analyser = this.analyser;
         const draw = () => {
-          this.analyser.getByteTimeDomainData(data);
+          if (this.analyser !== analyser) return; // this meter was closed or replaced
+          analyser.getByteTimeDomainData(data);
           let peak = 0;
           for (const value of data) peak = Math.max(peak, Math.abs(value - 128));
           this.level = Math.min(1, peak / 64);
@@ -86,6 +106,16 @@
       } catch (error) { /* the level bar is only a nicety */ }
     },
   };
+
+  // Shown when the microphone is muted by the phone, taken by another app, or unplugged.
+  const MIC_MUTED_TEXT = 'Your microphone seems to be muted or in use by another app. Close other apps that use the microphone, then try again.';
+  const MIC_ENDED_TEXT = 'The microphone stopped working. Check that it is connected and not used by another app, then record again.';
+  function onMicTrouble(kind) {
+    if (S.screen !== 'chat') return;
+    if (kind === 'back') { if (S.notice === MIC_MUTED_TEXT) setNotice(''); return; }
+    if (kind === 'ended' && S.rec && S.rec.state === 'recording') stopRecording();
+    setNotice(kind === 'ended' ? MIC_ENDED_TEXT : MIC_MUTED_TEXT);
+  }
 
   // A generic sound wave while recording: bars rise with the voice and stay flat in silence (it is only feedback).
   const Wave = {
@@ -365,7 +395,7 @@
         <div class="w-dock-actions">${buttons}</div></div>
       <p class="w-error${S.noticeInfo ? ' w-info' : ''}" role="alert" id="notice">${esc(S.notice)}</p>
       <div class="w-dock-mic">${ready}${picker}</div>`;
-    if (Mic.stream) Mic.meter();
+    if (Mic.stream) Mic.meter(); // a no-op while the meter already runs
     if (S.mode === 'recording') Wave.start(document.getElementById('wave'));
     const select = document.getElementById('mic-select');
     if (select) select.addEventListener('change', async () => {
@@ -432,7 +462,7 @@
     S.timer = null; S.beat = null; S.started = false;
     if (S.take) { URL.revokeObjectURL(S.take.url); S.take = null; }
     if (S.rec && S.rec.mr && S.rec.mr.state !== 'inactive') { try { S.rec.mr.stop(); } catch (error) { /* already stopped */ } }
-    if (S.rec) clearInterval(S.rec.sampler);
+    if (S.rec) { clearInterval(S.rec.sampler); clearTimeout(S.rec.watchdog); }
     S.rec = null;
     Mic.close();
   }
@@ -441,6 +471,7 @@
   async function startRecording() {
     setNotice('');
     try { await Mic.open(); } catch (error) { setNotice(micErrorText(error)); renderDock(); return; }
+    if (Mic.muted) { setNotice(MIC_MUTED_TEXT); renderDock(); return; }
     if (!window.MediaRecorder) { setNotice('This browser cannot record audio. Please use a recent version of Chrome, Edge, Firefox or Safari.'); return; }
     const mimeType = Core.pickMimeType(type => MediaRecorder.isTypeSupported(type));
     let recorder;
@@ -448,6 +479,7 @@
     catch (error) { setNotice('We could not start the recording on this device.'); return; }
     const chunks = [];
     recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+    recorder.onerror = () => { if (S.rec && S.rec.mr === recorder && S.rec.state === 'recording') stopRecording(); };
     S.rec = { mr: recorder, chunks, startedAt: Date.now(), state: 'recording', mimeType: recorder.mimeType || mimeType || 'audio/webm', peak: 0 };
     // The loudest moment of the recording tells whether any voice was captured (sampled on a timer, so it also works in a background tab).
     S.rec.sampler = setInterval(() => { S.rec.peak = Math.max(S.rec.peak, Mic.readLevel(), Mic.level); }, 150);
@@ -460,18 +492,22 @@
     const rec = S.rec;
     if (!rec || rec.state !== 'recording') return;
     rec.state = 'stopping';
-    rec.mr.onstop = () => {
-      if (S.rec !== rec) return;
+    // Some phones never fire "stop" on a broken recorder: the screen must not stay stuck, so a short timer finishes the job with what was collected.
+    const finish = () => {
+      if (S.rec !== rec || rec.state !== 'stopping') return;
+      clearTimeout(rec.watchdog);
       const blob = new Blob(rec.chunks, { type: rec.mimeType });
       const seconds = Math.min(Core.ANSWER_SECONDS, Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000)));
       rec.state = 'stopped';
-      if (!blob.size) { S.mode = 'idle'; setNotice('Nothing was recorded. Please try again.'); renderDock(); return; }
       clearInterval(rec.sampler);
+      if (!blob.size) { S.mode = 'idle'; setNotice(Mic.muted ? MIC_MUTED_TEXT : 'Nothing was recorded. Please try again.'); renderDock(); return; }
       S.take = { blob, url: URL.createObjectURL(blob), seconds, voiced: Core.hasVoice(Math.max(rec.peak, Mic.level)) };
       S.mode = 'recorded';
       renderDock();
     };
-    try { rec.mr.stop(); } catch (error) { S.mode = 'idle'; renderDock(); }
+    rec.mr.onstop = finish;
+    rec.watchdog = setTimeout(finish, STOP_WAIT_MS);
+    try { rec.mr.stop(); } catch (error) { finish(); }
   }
 
   function deleteTake() {
@@ -480,7 +516,7 @@
       try { S.rec.mr.stop(); } catch (error) { /* already stopped */ }
     }
     if (S.take) URL.revokeObjectURL(S.take.url);
-    if (S.rec) clearInterval(S.rec.sampler);
+    if (S.rec) { clearInterval(S.rec.sampler); clearTimeout(S.rec.watchdog); }
     S.take = null; S.rec = null;
     // Deleting does not reset the answer timer.
     S.mode = S.phase === 'interview' && Core.secondsLeftFrom(S.deadline, Date.now()) <= 0 ? 'timeup' : 'idle';

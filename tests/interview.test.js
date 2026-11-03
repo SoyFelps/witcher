@@ -142,3 +142,17 @@ test('the stylesheet and script versions agree across pages', () => {
   for (const file of ['index.html', 'interview.html']) for (const match of read(file).matchAll(/\?v=([\w-]+)/g)) versions.add(match[1]);
   assert.equal(versions.size, 1, `all assets use one version: ${[...versions]}`);
 });
+
+test('the microphone meter is never stacked and a stuck recorder never freezes the screen', () => {
+  const js = read('interview.js');
+  const meter = js.slice(js.indexOf('    meter() {'), js.indexOf('  // A generic sound wave'));
+  assert.ok(meter.includes('if (this.analyser) {') && meter.includes('return;'), 'a running meter is reused, never a second audio context');
+  assert.ok(meter.includes('if (this.analyser !== analyser) return;'), 'a replaced meter stops its own drawing loop');
+  assert.ok(js.includes('this.close(); // a dead stream is released completely'), 'a dead stream is released before a new one is opened');
+  assert.match(js, /track\.addEventListener\('mute'/, 'a muted microphone is noticed');
+  assert.match(js, /track\.addEventListener\('ended'/, 'a lost microphone is noticed');
+  assert.ok(js.includes('if (Mic.muted) { setNotice(MIC_MUTED_TEXT)'), 'recording does not start on a muted microphone');
+  const stop = js.slice(js.indexOf('  function stopRecording() {'), js.indexOf('  function deleteTake() {'));
+  assert.ok(stop.includes('rec.watchdog = setTimeout(finish, STOP_WAIT_MS)') && stop.includes('rec.mr.onstop = finish'), 'stopping finishes even when the recorder never says "stop"');
+  assert.match(js, /recorder\.onerror/, 'a recorder error ends the recording');
+});
