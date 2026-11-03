@@ -273,3 +273,21 @@ test('more than 32% of the candidate answers skipped always gives a negative imp
   assert.ok(withLanguageNote('x'.repeat(9000), true, true).length <= 6000, 'both notes fit the column');
   assert.match(SKIPPED_NOTE, /more than 32%/);
 });
+
+test('the invitation e-mail button stays visible and readable for white, pale and dark brand colours', async () => {
+  const { buildInvitationEmail, mailColors } = await mail();
+  const base = { name: 'Marina', jobTitle: 'Designer', companyName: 'CoreFront', link: 'https://x.test/interview.html#i=abc', code: '042517', expiresAt: '2026-11-04T12:00:00Z' };
+  const lum = hex => [0, 1, 2].map(i => { const v = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const ratio = (a, b) => { const [h, l] = [lum(a), lum(b)].sort((x, y) => y - x); return (h + 0.05) / (l + 0.05); };
+  for (const color of ['#ffffff', '#fefefe', '#ffd400', '#fff8dc', '#1e94a4', '#315f4a', '#000000']) {
+    const colors = mailColors(color);
+    assert.ok(ratio(colors.edge, '#ffffff') >= 3, color + ': edge visible on the white e-mail');
+    // same text rule as the page (white on dark and mid colours, near-black on light ones); mid colours such as #1e94a4 are about 3.6:1 and stay as approved
+    assert.ok(ratio(colors.text, color) >= 3, color + ': button text readable on the fill');
+    const html = buildInvitationEmail({ ...base, brandColor: color }).html;
+    assert.ok(html.includes(`background:${color};color:${colors.text}`), color + ': button fill and text');
+    assert.ok(html.includes(`border:1px solid ${colors.edge}`), color + ': button edge');
+  }
+  assert.equal(mailColors('#315f4a').edge, '#315f4a', 'a colour that already works is unchanged');
+  assert.doesNotMatch(buildInvitationEmail({ ...base, brandColor: '#ffffff' }).html, /background:#ffffff;color:#ffffff/, 'never white text on a white button');
+});

@@ -25,6 +25,36 @@ function singleLine(value: unknown, max: number): string {
   return String(value ?? "").replace(CONTROL_CHARACTERS, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+// The brand colour on the e-mail button: text that stays readable on it, and an edge that stays visible on a white page
+// (a white or pale brand colour would otherwise give a button nobody can see). Same rules as accentTokens in interview-core.js.
+const MAIL_INK = "#17251e";
+const MAIL_PAGE = "#ffffff";
+
+function channelLuminance(hex: string, index: number): number {
+  const value = parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+  return value <= 0.03928 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+}
+function luminance(hex: string): number {
+  return 0.2126 * channelLuminance(hex, 0) + 0.7152 * channelLuminance(hex, 1) + 0.0722 * channelLuminance(hex, 2);
+}
+function contrast(a: string, b: string): number {
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
+}
+function mix(a: string, b: string, ratio: number): string {
+  const part = (hex: string, i: number) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+  return "#" + [0, 1, 2].map((i) => Math.round(part(a, i) * ratio + part(b, i) * (1 - ratio)).toString(16).padStart(2, "0")).join("");
+}
+
+export function mailColors(accent: string): { accent: string; text: string; edge: string } {
+  let edge = accent;
+  for (let ratio = 1; contrast(edge, MAIL_PAGE) < 3 && ratio > 0;) {
+    ratio = Math.max(0, ratio - 0.05);
+    edge = mix(accent, MAIL_INK, ratio);
+  }
+  return { accent, text: luminance(accent) > 0.4 ? MAIL_INK : "#ffffff", edge };
+}
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -49,7 +79,8 @@ export function buildInvitationEmail(input: InvitationInput): InvitationEmail {
   const name = singleLine(input.name, 120) || "there";
   const job = singleLine(input.jobTitle, 120) || "the open role";
   const company = singleLine(input.companyName, 80) || "the hiring team";
-  const accent = /^#[0-9a-fA-F]{6}$/.test(input.brandColor || "") ? String(input.brandColor) : "#315f4a";
+  const colors = mailColors(/^#[0-9a-fA-F]{6}$/.test(input.brandColor || "") ? String(input.brandColor) : "#315f4a");
+  const accent = colors.accent;
   const until = formatDate(input.expiresAt);
 
   const subject = singleLine(`${input.isResend ? "Reminder: your" : "Your"} interview for ${job} at ${company}`, 200);
@@ -81,12 +112,12 @@ export function buildInvitationEmail(input: InvitationInput): InvitationEmail {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e9e4;border-radius:12px;">
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${accent};font-weight:700;">${input.isResend ? "Interview reminder" : "Interview invitation"}</p>
+                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${colors.edge};font-weight:700;">${input.isResend ? "Interview reminder" : "Interview invitation"}</p>
                 <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">Hi ${n}, you are invited to an interview.</h1>
                 <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;"><strong>${c}</strong> invites you to a short interview for <strong>${j}</strong>. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.</p>
                 <p style="margin:0 0 8px;font-size:13px;color:#748178;">Your access code${input.isResend ? " (replaces any earlier code)" : ""}</p>
                 <p style="margin:0 0 24px;font-size:30px;letter-spacing:.3em;font-weight:700;color:#17251e;">${code}</p>
-                <p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;padding:12px 22px;border-radius:8px;background:${accent};color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Start your interview</a></p>
+                <p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;padding:12px 22px;border:1px solid ${colors.edge};border-radius:8px;background:${accent};color:${colors.text};font-size:15px;font-weight:600;text-decoration:none;">Start your interview</a></p>
                 <p style="margin:0;font-size:13px;line-height:1.6;color:#748178;">${escapeHtml(until ? `Valid until ${until}. ` : "")}You will need a quiet place and a working microphone.</p>
               </td>
             </tr>

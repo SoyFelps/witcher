@@ -62,20 +62,41 @@
     return '#' + [0, 1, 2].map(i => Math.round(part(a, i) * ratio + part(b, i) * (1 - ratio)).toString(16).padStart(2, '0')).join('');
   }
 
+  // The page background the colours must stand out from, and the least contrast a button edge or icon needs (WCAG, non-text).
+  const PAGE_BACKGROUND = '#f8f8f8';
+  const EDGE_MIN_CONTRAST = 3;
+
+  /**
+   * The colour of borders, focus rings and ticks: the brand colour itself when it already stands out from the page, otherwise
+   * the same colour darkened just enough to do so (white becomes a mid grey). A colour that already works is returned unchanged.
+   */
+  function edgeColor(hex) {
+    if (!isValidColor(hex)) return null;
+    let edge = hex;
+    for (let ratio = 1; contrastRatio(edge, PAGE_BACKGROUND) < EDGE_MIN_CONTRAST && ratio > 0; ) {
+      ratio = Math.max(0, ratio - 0.05);
+      edge = mixHex(hex, '#17251e', ratio);
+    }
+    return edge;
+  }
+
   /**
    * Every colour of the page derived from the company's brand colour: soft, mid and line tints for backgrounds and
    * borders, and an ink for text on those tints that is always dark enough to read (contrast of at least 4.5).
+   * A colour too light to be seen on the page (white, pale yellow) keeps its fill, gets a visible `edge`, and its tints come from that edge.
    */
   function accentTokens(hex) {
     if (!isValidColor(hex)) return null;
     const white = '#ffffff';
-    const soft = mixHex(hex, white, 0.12);
-    let ink = hex;
+    const edge = edgeColor(hex);
+    const base = edge; // equal to the brand colour whenever that colour is already visible, so such a colour looks exactly as before
+    const soft = mixHex(base, white, 0.12);
+    let ink = base;
     for (let ratio = 1; contrastRatio(ink, soft) < 4.5 && ratio > 0; ) {
       ratio = Math.max(0, ratio - 0.1);
-      ink = mixHex(hex, '#17251e', ratio);
+      ink = mixHex(base, '#17251e', ratio);
     }
-    return { accent: hex, onAccent: contrastText(hex), soft, mid: mixHex(hex, white, 0.22), line: mixHex(hex, white, 0.4), ink };
+    return { accent: hex, edge, onAccent: contrastText(hex), soft, mid: mixHex(base, white, 0.22), line: mixHex(base, white, 0.4), ink };
   }
 
   /** First format the browser can record in, from `isSupported(mime)` (MediaRecorder.isTypeSupported). */
@@ -161,7 +182,7 @@
   }
 
   return {
-    ANSWER_SECONDS, WARN_SECONDS, TEST_MAX_SECONDS, VOICE_MIN_LEVEL, hasVoice, parseLinkId, formatClock, isValidColor, contrastText, contrastRatio, mixHex, accentTokens, pickMimeType,
+    ANSWER_SECONDS, WARN_SECONDS, TEST_MAX_SECONDS, VOICE_MIN_LEVEL, hasVoice, parseLinkId, formatClock, isValidColor, contrastText, contrastRatio, mixHex, edgeColor, accentTokens, pickMimeType,
     secondsLeftFrom, timerTone, stateScreen, errorText, cleanCode, clockTime, escapeHtml,
   };
 });

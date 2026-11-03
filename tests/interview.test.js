@@ -164,3 +164,27 @@ test('a double tap on Start or Record does nothing the second time', () => {
   const record = js.slice(js.indexOf('  async function startRecording() {'), js.indexOf('  async function openRecorder() {'));
   assert.ok(record.includes("if (S.busy || S.mode === 'recording') return;") && record.includes('finally { S.busy = false; }'), 'Record is locked while it works');
 });
+
+test('light company colours keep their fill but always get an edge that stands out from the page', () => {
+  const page = '#f8f8f8';
+  for (const color of ['#ffffff', '#fefefe', '#f5f5f5', '#fff8dc', '#ffd400', '#d2f37a', '#e8f0ff']) {
+    const tokens = Core.accentTokens(color);
+    assert.equal(tokens.accent, color, color + ': the fill stays the company colour');
+    assert.ok(Core.contrastRatio(tokens.edge, page) >= 3, color + ': edge visible on the page');
+    assert.ok(Core.contrastRatio(tokens.onAccent, tokens.accent) >= 4.5, color + ': text on the fill');
+    assert.ok(Core.contrastRatio(tokens.ink, tokens.soft) >= 4.5, color + ': ink on the tint');
+    assert.notEqual(tokens.soft, '#ffffff', color + ': the soft tint is not white on white');
+    assert.notEqual(tokens.soft, tokens.line, color + ': the tints are told apart');
+  }
+  // a colour that already stands out is untouched: edge = colour, same tints as before
+  for (const color of ['#315f4a', '#1e94a4', '#3556c8', '#000000', '#c2410c']) {
+    const tokens = Core.accentTokens(color);
+    assert.equal(tokens.edge, color, color + ': no change for a colour that already works');
+    assert.equal(tokens.soft, Core.mixHex(color, '#ffffff', 0.12));
+  }
+  assert.equal(Core.edgeColor('red'), null);
+  const css = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+  assert.match(css, /\.w-btn\{[^}]*border:1px solid var\(--accent-edge\)/);
+  assert.match(css, /accent-color:var\(--accent-edge\)/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8'), /--accent-edge/);
+});

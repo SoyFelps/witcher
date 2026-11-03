@@ -11,7 +11,7 @@
   --shadow-xs:rgba(28,47,36,.04);--shadow-sm:rgba(29,50,35,.08);--shadow-md:rgba(28,56,36,.14);
   --overlay:rgba(16,29,21,.47);
   /* Brand colour of the interview page: the company's colour when it has one (set by interview.js), else the Witcher green. */
-  --accent:var(--green);--on-accent:var(--surface);
+  --accent:var(--green);--accent-edge:var(--green);--on-accent:var(--surface);
   --accent-soft:var(--tint);--accent-mid:var(--mint-strong);--accent-line:var(--green-hover);--accent-ink:var(--green-deep);
 }
 *{box-sizing:border-box}
@@ -34,7 +34,7 @@ button,input,select{font:inherit;color:inherit}
 .w-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;background:var(--surface);border-bottom:1px solid var(--line)}
 .w-top-brand{display:flex;align-items:center;gap:12px;min-width:0}
 .w-logo{height:34px;width:auto;max-width:140px;object-fit:contain}
-.w-top .w-mark{background:var(--accent);color:var(--on-accent)}
+.w-top .w-mark{background:var(--accent);color:var(--on-accent);box-shadow:0 0 0 1px var(--accent-edge)}
 .w-company{font-size:20px;font-weight:700;color:var(--text-heading);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .w-powered{padding-left:12px;border-left:1px solid var(--line);color:var(--soft);font-size:14px;white-space:nowrap}
 .w-help{background:none;border:0;color:var(--muted);font-size:14px;cursor:pointer;padding:6px 8px;border-radius:8px}
@@ -46,10 +46,10 @@ button,input,select{font:inherit;color:inherit}
 .w-sub{margin:0 0 20px;color:var(--muted)}
 .w-label{display:block;margin:20px 0 6px;font-size:14px;font-weight:600;color:var(--text-strong)}
 .w-input{width:100%;padding:12px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);font-size:18px}
-.w-input:focus,.w-select:focus,.w-btn:focus-visible,.w-help:focus-visible{outline:2px solid var(--accent);outline-offset:2px;box-shadow:0 0 0 4px var(--accent-soft)}
+.w-input:focus,.w-select:focus,.w-btn:focus-visible,.w-help:focus-visible{outline:2px solid var(--accent-edge);outline-offset:2px;box-shadow:0 0 0 4px var(--accent-soft)}
 .w-code{font-size:28px;letter-spacing:.35em;text-align:center;font-weight:700}
 .w-error{min-height:20px;margin:10px 0 0;color:var(--red-text);font-size:14px}
-.w-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border:1px solid var(--accent);border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer}
+.w-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 22px;border:1px solid var(--accent-edge);border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:600;cursor:pointer}
 .w-btn:hover:not(:disabled){filter:brightness(.92)}
 .w-btn:disabled{opacity:.45;cursor:not-allowed}
 .w-btn-ghost{background:var(--surface);color:var(--ink);border-color:var(--border-strong)}
@@ -58,7 +58,7 @@ button,input,select{font:inherit;color:inherit}
 .w-list{margin:12px 0 18px;padding-left:20px;color:var(--text-body)}
 .w-list li{margin:0 0 10px}
 .w-check{display:flex;gap:10px;align-items:flex-start;margin:6px 0 0;color:var(--text-body);cursor:pointer}
-.w-check input{margin-top:5px;width:18px;height:18px;accent-color:var(--accent)}
+.w-check input{margin-top:5px;width:18px;height:18px;accent-color:var(--accent-edge)}
 .w-done{text-align:center}
 .w-done-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;margin-bottom:12px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);font-size:28px}
 
@@ -98,7 +98,7 @@ button,input,select{font:inherit;color:inherit}
 @keyframes w-pulse{50%{opacity:.25}}
 .w-player{width:210px;max-width:210px;height:40px}
 .w-wait{display:inline-flex;align-items:center;gap:10px;color:var(--muted)}
-.w-spin{width:16px;height:16px;border:2px solid var(--border-strong);border-top-color:var(--accent);border-radius:50%;animation:w-turn-around .8s linear infinite}
+.w-spin{width:16px;height:16px;border:2px solid var(--border-strong);border-top-color:var(--accent-edge);border-radius:50%;animation:w-turn-around .8s linear infinite}
 @keyframes w-turn-around{to{transform:rotate(360deg)}}
 .w-dock-mic{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
 .w-ready{display:inline-flex;align-items:center;gap:6px}
