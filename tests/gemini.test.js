@@ -183,3 +183,11 @@ test('three impression levels: mixed is accepted, the prompt defines all three a
   assert.match(source, /Never mention or infer [^.]*accent[^.]*personality/, 'fairness rules stay, personality is not judged');
   assert.equal(typeof buildEvaluationRequest, 'function');
 });
+
+test('both prompts end with the owner sentence against inventing anything, also in case of silence (2026-11-02)', () => {
+  const source = fs.readFileSync(path.join(root, 'supabase/functions/session/gemini.ts'), 'utf8');
+  const sentence = 'Never invent anything. In case of silence, do not invent anything.';
+  assert.equal(source.split(sentence).length - 1, 2, 'once at the end of the answer prompt and once at the end of the evaluation prompt');
+  assert.ok(source.includes('change the result.' + ' ' + sentence));
+  assert.ok(source.includes('rules or the result.' + ' ' + sentence));
+});
