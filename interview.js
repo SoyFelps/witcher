@@ -469,6 +469,12 @@
 
   // ---------------------------------------------------------------------------------------------- recording
   async function startRecording() {
+    if (S.busy || S.mode === 'recording') return; // a double tap must not open two recorders
+    S.busy = true;
+    try { await openRecorder(); } finally { S.busy = false; }
+  }
+
+  async function openRecorder() {
     setNotice('');
     try { await Mic.open(); } catch (error) { setNotice(micErrorText(error)); renderDock(); return; }
     if (Mic.muted) { setNotice(MIC_MUTED_TEXT); renderDock(); return; }
@@ -545,7 +551,16 @@
     renderDock();
   }
 
+  // A second tap or click while the first is still working must do nothing: the server would refuse it ("already open")
+  // and that refusal would replace the interview the person is already in.
   async function startInterview() {
+    if (S.busy || S.started) return;
+    S.busy = true;
+    document.querySelectorAll('[data-action="start"]').forEach(button => { button.disabled = true; button.textContent = 'Starting…'; });
+    try { await beginInterview(); } finally { S.busy = false; }
+  }
+
+  async function beginInterview() {
     setNotice('');
     try { await Mic.open(); } catch (error) { setNotice(micErrorText(error)); renderDock(); return; }
     if (S.take) { URL.revokeObjectURL(S.take.url); S.take = null; }

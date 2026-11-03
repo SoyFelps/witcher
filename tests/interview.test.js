@@ -156,3 +156,11 @@ test('the microphone meter is never stacked and a stuck recorder never freezes t
   assert.ok(stop.includes('rec.watchdog = setTimeout(finish, STOP_WAIT_MS)') && stop.includes('rec.mr.onstop = finish'), 'stopping finishes even when the recorder never says "stop"');
   assert.match(js, /recorder\.onerror/, 'a recorder error ends the recording');
 });
+
+test('a double tap on Start or Record does nothing the second time', () => {
+  const js = read('interview.js');
+  const start = js.slice(js.indexOf('  async function startInterview() {'), js.indexOf('  async function beginInterview() {'));
+  assert.ok(start.includes('if (S.busy || S.started) return;') && start.includes("'Starting…'") && start.includes('finally { S.busy = false; }'), 'Start is locked while it works');
+  const record = js.slice(js.indexOf('  async function startRecording() {'), js.indexOf('  async function openRecorder() {'));
+  assert.ok(record.includes("if (S.busy || S.mode === 'recording') return;") && record.includes('finally { S.busy = false; }'), 'Record is locked while it works');
+});
