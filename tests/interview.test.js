@@ -89,7 +89,7 @@ test('a recording with no voice is recognised and never sent', () => {
   assert.match(Core.errorText('no_voice'), /couldn't hear your voice/);
   const js = read('interview.js');
   assert.ok(js.includes('Core.hasVoice(') && js.includes('const silent = interview && S.take && !S.take.voiced'), 'the page checks for voice before offering Send');
-  assert.ok(js.includes("(silent ? '' : '<button class=\"w-btn\" type=\"button\" data-action=\"send\">Send answer</button>')"), 'no Send button for a silent recording');
+  assert.ok(js.includes('(silent ? \'\' : `<button class="w-btn" type="button" data-action="send">${esc(T(\'btnSend\'))}</button>`)'), 'no Send button for a silent recording');
 });
 
 test('chat text is escaped', () => {
@@ -111,11 +111,15 @@ test('interview page: files, order of scripts, no storage of audio, leave handli
   assert.match(js, /pagehide/);
   assert.match(js, /beforeunload/);
   assert.match(js, /event\.persisted/, 'a page kept in the back/forward cache is not a "leave"');
-  assert.match(js, /The AI does not determine who passes or fails/);
-  assert.match(js, /If you leave or refresh this page after the first question, the interview is cancelled/);
-  assert.match(js, /Tell me about your career so far/);
+  assert.match(read('interview-i18n.js'), /The AI does not determine who passes or fails/);
+  assert.ok(js.includes("addMessage('ai', T('disclaimer'))"), 'the disclaimer is the first message, in the language of the job');
+  assert.match(read('interview-i18n.js'), /If you leave or refresh this page after the first question, the interview is cancelled/);
+  assert.ok(js.includes("T('consentLeaveHtml')"), 'the warning about leaving is on the consent screen, in the language of the job');
+  assert.match(read('interview-i18n.js'), /Tell me about your career so far/);
+  assert.ok(js.includes("T('testQuestion')"));
   assert.match(js, /accentTokens/);
-  assert.ok(js.includes('data-action="delete">Try again</button>'), 'after Stop the button is called Try again');
+  assert.ok(js.includes("data-action=\"delete\">${esc(T('btnTryAgain'))}</button>"), 'after Stop the button is called Try again (btnTryAgain)');
+  assert.equal(require('../interview-i18n.js').TEXT.en.btnTryAgain, 'Try again');
   assert.ok(!/>Delete</.test(js) && !js.includes("'Record again'"), 'no Delete button any more');
   const recording = js.slice(js.indexOf("S.mode === 'recording') {"), js.indexOf("S.mode === 'recorded') {"));
   assert.ok(recording.includes('data-action="stop"') && !recording.includes('data-action="delete"'), 'while recording the only button is Stop');
@@ -123,7 +127,7 @@ test('interview page: files, order of scripts, no storage of audio, leave handli
   assert.ok(recorded.includes('timeIsUp') && recorded.includes('data-action="skip"') && recorded.includes('data-action="send"'), 'after time-up: Skip and Send');
   assert.match(js, /TEST_MAX_SECONDS/, 'the microphone test is limited to one minute');
   assert.match(js, /id="wave"/, 'there is a sound wave while recording');
-  assert.ok(js.includes("addDivider('The interview starts now')"), 'the interview continues the same chat');
+  assert.ok(js.includes("addDivider(T('dividerStart'))"), 'the interview continues the same chat');
   assert.ok(!js.includes("list.innerHTML = ''"), 'starting the interview never clears the conversation');
   assert.doesNotMatch(js, /action: 'answer'[\s\S]{0,400}localStorage/);
 });
@@ -151,7 +155,7 @@ test('the microphone meter is never stacked and a stuck recorder never freezes t
   assert.ok(js.includes('this.close(); // a dead stream is released completely'), 'a dead stream is released before a new one is opened');
   assert.match(js, /track\.addEventListener\('mute'/, 'a muted microphone is noticed');
   assert.match(js, /track\.addEventListener\('ended'/, 'a lost microphone is noticed');
-  assert.ok(js.includes('if (Mic.muted) { setNotice(MIC_MUTED_TEXT)'), 'recording does not start on a muted microphone');
+  assert.ok(js.includes("if (Mic.muted) { setNotice(T('micMuted'))"), 'recording does not start on a muted microphone');
   const stop = js.slice(js.indexOf('  function stopRecording() {'), js.indexOf('  function deleteTake() {'));
   assert.ok(stop.includes('rec.watchdog = setTimeout(finish, STOP_WAIT_MS)') && stop.includes('rec.mr.onstop = finish'), 'stopping finishes even when the recorder never says "stop"');
   assert.match(js, /recorder\.onerror/, 'a recorder error ends the recording');
@@ -160,7 +164,7 @@ test('the microphone meter is never stacked and a stuck recorder never freezes t
 test('a double tap on Start or Record does nothing the second time', () => {
   const js = read('interview.js');
   const start = js.slice(js.indexOf('  async function startInterview() {'), js.indexOf('  async function beginInterview() {'));
-  assert.ok(start.includes('if (S.busy || S.started) return;') && start.includes("'Starting…'") && start.includes('finally { S.busy = false; }'), 'Start is locked while it works');
+  assert.ok(start.includes('if (S.busy || S.started) return;') && start.includes("T('starting')") && start.includes('finally { S.busy = false; }'), 'Start is locked while it works');
   const record = js.slice(js.indexOf('  async function startRecording() {'), js.indexOf('  async function openRecorder() {'));
   assert.ok(record.includes("if (S.busy || S.mode === 'recording') return;") && record.includes('finally { S.busy = false; }'), 'Record is locked while it works');
 });
@@ -195,8 +199,8 @@ test('light company colours keep their fill but always get an edge that stands o
 
 test('the tag above a question says "Microphone check" for the microphone test and "Your turn to respond" for real questions', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8');
-  assert.match(src, /esc\(extra\.turnLabel \|\| 'Your turn to respond'\)/);
-  assert.match(src, /addMessage\('ai', TEST_QUESTION, \{ current: true, turnLabel: 'Microphone check' \}\)/);
+  assert.match(src, /esc\(extra\.turnLabel \|\| T\('yourTurnLabel'\)\)/);
+  assert.match(src, /addMessage\('ai', T\('testQuestion'\), \{ current: true, turnLabel: T\('micCheck'\) \}\)/);
   assert.match(src, /addMessage\('ai', prompt\.text, \{ current: true \}\)/, 'real questions keep the default tag');
 });
 

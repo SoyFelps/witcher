@@ -1,5 +1,7 @@
 // Interview invitation e-mail: pure helpers with no Deno or network access, so they can be unit-tested in Node.
 // E-mail clients cannot read CSS variables, so the brand colours below are written out on purpose.
+// The e-mail is written in the language of the interview (the language of the job): English, Portuguese or Spanish.
+import { DEFAULT_LANGUAGE, type Lang, nativeName } from "./language.ts";
 
 export interface InvitationInput {
   name: string;
@@ -10,6 +12,7 @@ export interface InvitationInput {
   code: string;
   expiresAt: string;
   isResend?: boolean;
+  language?: Lang;
 }
 
 export interface InvitationEmail {
@@ -74,42 +77,154 @@ export function safeDisplayName(value: string): string {
   return singleLine(value, 60).replace(/["<>@\\,;:()[\]]/g, "").trim() || "Witcher";
 }
 
-function formatDate(iso: string): string {
+interface Copy {
+  locale: string;
+  htmlLang: string;
+  fallbackName: string;
+  fallbackJob: string;
+  fallbackCompany: string;
+  subject: (isResend: boolean, job: string, company: string) => string;
+  hi: (name: string) => string;
+  intro: (company: string, job: string) => string;
+  introHtml: (company: string, job: string) => string;
+  languageLine: (language: string) => string;
+  startHere: string;
+  accessCode: string;
+  resendNote: string;
+  validUntil: (date: string) => string;
+  needs: string;
+  automated: (company: string) => string;
+  labelNew: string;
+  labelResend: string;
+  heading: (name: string) => string;
+  codeLabel: string;
+  codeLabelResend: string;
+  button: string;
+  validShort: (date: string) => string;
+  footer: (company: string) => string;
+}
+
+const COPY: Record<Lang, Copy> = {
+  en: {
+    locale: "en-US",
+    htmlLang: "en",
+    fallbackName: "there",
+    fallbackJob: "the open role",
+    fallbackCompany: "the hiring team",
+    subject: (isResend, job, company) => `${isResend ? "Reminder: your" : "Your"} interview for ${job} at ${company}`,
+    hi: (name) => `Hi ${name},`,
+    intro: (company, job) => `${company} invites you to a short interview for ${job}. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.`,
+    introHtml: (company, job) => `<strong>${company}</strong> invites you to a short interview for <strong>${job}</strong>. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.`,
+    languageLine: (language) => `The interview is in ${language}: please answer in ${language}.`,
+    startHere: "Start here:",
+    accessCode: "Your access code:",
+    resendNote: "(This code replaces any code from an earlier e-mail.)",
+    validUntil: (date) => `The invitation is valid until ${date}. You will need a quiet place and a working microphone.`,
+    needs: "You will need a quiet place and a working microphone.",
+    automated: (company) => `This is an automated message sent by Witcher on behalf of ${company}. Please do not reply to this e-mail.`,
+    labelNew: "Interview invitation",
+    labelResend: "Interview reminder",
+    heading: (name) => `Hi ${name}, you are invited to an interview.`,
+    codeLabel: "Your access code",
+    codeLabelResend: "Your access code (replaces any earlier code)",
+    button: "Start your interview",
+    validShort: (date) => `Valid until ${date}. `,
+    footer: (company) => `Automated message sent by Witcher on behalf of ${company}. Please do not reply to this e-mail.`,
+  },
+  pt: {
+    locale: "pt-BR",
+    htmlLang: "pt-BR",
+    fallbackName: "tudo bem",
+    fallbackJob: "a vaga em aberto",
+    fallbackCompany: "a equipe de contratação",
+    subject: (isResend, job, company) => `${isResend ? "Lembrete: sua" : "Sua"} entrevista para ${job} em ${company}`,
+    hi: (name) => `Olá, ${name},`,
+    intro: (company, job) => `${company} convida você para uma entrevista curta para ${job}. Um assistente de IA faz algumas perguntas e você responde em voz alta. A empresa analisa as suas respostas; a IA não decide quem avança.`,
+    introHtml: (company, job) => `<strong>${company}</strong> convida você para uma entrevista curta para <strong>${job}</strong>. Um assistente de IA faz algumas perguntas e você responde em voz alta. A empresa analisa as suas respostas; a IA não decide quem avança.`,
+    languageLine: (language) => `A entrevista é em ${language}: responda em ${language}.`,
+    startHere: "Comece aqui:",
+    accessCode: "Seu código de acesso:",
+    resendNote: "(Este código substitui qualquer código de um e-mail anterior.)",
+    validUntil: (date) => `O convite é válido até ${date}. Você vai precisar de um lugar silencioso e de um microfone funcionando.`,
+    needs: "Você vai precisar de um lugar silencioso e de um microfone funcionando.",
+    automated: (company) => `Esta é uma mensagem automática enviada pelo Witcher em nome de ${company}. Por favor, não responda a este e-mail.`,
+    labelNew: "Convite para entrevista",
+    labelResend: "Lembrete de entrevista",
+    heading: (name) => `Olá, ${name}, você foi convidado(a) para uma entrevista.`,
+    codeLabel: "Seu código de acesso",
+    codeLabelResend: "Seu código de acesso (substitui qualquer código anterior)",
+    button: "Começar a entrevista",
+    validShort: (date) => `Válido até ${date}. `,
+    footer: (company) => `Mensagem automática enviada pelo Witcher em nome de ${company}. Por favor, não responda a este e-mail.`,
+  },
+  es: {
+    locale: "es-ES",
+    htmlLang: "es",
+    fallbackName: "hola",
+    fallbackJob: "la vacante abierta",
+    fallbackCompany: "el equipo de contratación",
+    subject: (isResend, job, company) => `${isResend ? "Recordatorio: su" : "Su"} entrevista para ${job} en ${company}`,
+    hi: (name) => `Hola, ${name}:`,
+    intro: (company, job) => `${company} le invita a una entrevista breve para ${job}. Un asistente de IA le hace algunas preguntas y usted responde en voz alta. La empresa revisa sus respuestas; la IA no decide quién avanza.`,
+    introHtml: (company, job) => `<strong>${company}</strong> le invita a una entrevista breve para <strong>${job}</strong>. Un asistente de IA le hace algunas preguntas y usted responde en voz alta. La empresa revisa sus respuestas; la IA no decide quién avanza.`,
+    languageLine: (language) => `La entrevista es en ${language}: responda en ${language}.`,
+    startHere: "Comience aquí:",
+    accessCode: "Su código de acceso:",
+    resendNote: "(Este código reemplaza cualquier código de un correo anterior.)",
+    validUntil: (date) => `La invitación es válida hasta el ${date}. Necesitará un lugar tranquilo y un micrófono que funcione.`,
+    needs: "Necesitará un lugar tranquilo y un micrófono que funcione.",
+    automated: (company) => `Este es un mensaje automático enviado por Witcher en nombre de ${company}. Por favor, no responda a este correo.`,
+    labelNew: "Invitación a entrevista",
+    labelResend: "Recordatorio de entrevista",
+    heading: (name) => `Hola, ${name}, está invitado(a) a una entrevista.`,
+    codeLabel: "Su código de acceso",
+    codeLabelResend: "Su código de acceso (reemplaza cualquier código anterior)",
+    button: "Comenzar la entrevista",
+    validShort: (date) => `Válido hasta el ${date}. `,
+    footer: (company) => `Mensaje automático enviado por Witcher en nombre de ${company}. Por favor, no responda a este correo.`,
+  },
+};
+
+function formatDate(iso: string, locale: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+  return date.toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
 }
 
 export function buildInvitationEmail(input: InvitationInput): InvitationEmail {
-  const name = singleLine(input.name, 120) || "there";
-  const job = singleLine(input.jobTitle, 120) || "the open role";
-  const company = singleLine(input.companyName, 80) || "the hiring team";
+  const lang: Lang = input.language ?? DEFAULT_LANGUAGE;
+  const c = COPY[lang];
+  const languageName = nativeName(lang);
+  const name = singleLine(input.name, 120) || c.fallbackName;
+  const job = singleLine(input.jobTitle, 120) || c.fallbackJob;
+  const company = singleLine(input.companyName, 80) || c.fallbackCompany;
   const colors = mailColors(/^#[0-9a-fA-F]{6}$/.test(input.brandColor || "") ? String(input.brandColor) : "#315f4a");
   const accent = colors.accent;
-  const until = formatDate(input.expiresAt);
+  const until = formatDate(input.expiresAt, c.locale);
 
-  const subject = singleLine(`${input.isResend ? "Reminder: your" : "Your"} interview for ${job} at ${company}`, 200);
+  const subject = singleLine(c.subject(Boolean(input.isResend), job, company), 200);
   const text = [
-    `Hi ${name},`,
+    c.hi(name),
     "",
-    `${company} invites you to a short interview for ${job}. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.`,
+    c.intro(company, job),
+    c.languageLine(languageName),
     "",
-    `Start here: ${input.link}`,
-    `Your access code: ${input.code}`,
-    ...(input.isResend ? ["(This code replaces any code from an earlier e-mail.)"] : []),
+    `${c.startHere} ${input.link}`,
+    `${c.accessCode} ${input.code}`,
+    ...(input.isResend ? [c.resendNote] : []),
     "",
-    until ? `The invitation is valid until ${until}. You will need a quiet place and a working microphone.` : "You will need a quiet place and a working microphone.",
+    until ? c.validUntil(until) : c.needs,
     "",
-    `This is an automated message sent by Witcher on behalf of ${company}. Please do not reply to this e-mail.`,
+    c.automated(company),
   ].join("\n");
 
   const n = escapeHtml(name);
   const j = escapeHtml(job);
-  const c = escapeHtml(company);
+  const co = escapeHtml(company);
   const link = escapeHtml(input.link);
   const code = escapeHtml(input.code);
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${c.htmlLang}">
   <body style="margin:0;padding:0;background:#f8f8f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#17251e;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8f8f8;padding:32px 16px;">
       <tr>
@@ -117,18 +232,19 @@ export function buildInvitationEmail(input: InvitationInput): InvitationEmail {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e2e9e4;border-radius:12px;">
             <tr>
               <td style="padding:32px;">
-                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${colors.strong};font-weight:700;">${input.isResend ? "Interview reminder" : "Interview invitation"}</p>
-                <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">Hi ${n}, you are invited to an interview.</h1>
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;"><strong>${c}</strong> invites you to a short interview for <strong>${j}</strong>. An AI assistant asks a few questions and you answer out loud. The company reviews your answers; the AI does not decide who moves forward.</p>
-                <p style="margin:0 0 8px;font-size:13px;color:#748178;">Your access code${input.isResend ? " (replaces any earlier code)" : ""}</p>
+                <p style="margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:${colors.strong};font-weight:700;">${input.isResend ? c.labelResend : c.labelNew}</p>
+                <h1 style="margin:0 0 20px;font-size:22px;line-height:1.3;color:#17251e;">${c.heading(n)}</h1>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${c.introHtml(co, j)}</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#34463a;">${escapeHtml(c.languageLine(languageName))}</p>
+                <p style="margin:0 0 8px;font-size:13px;color:#748178;">${input.isResend ? c.codeLabelResend : c.codeLabel}</p>
                 <p style="margin:0 0 24px;font-size:30px;letter-spacing:.3em;font-weight:700;color:#17251e;">${code}</p>
-                <p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;padding:12px 22px;border:1px solid ${colors.edge};border-radius:8px;background:${accent};color:${colors.text};font-size:15px;font-weight:600;text-decoration:none;">Start your interview</a></p>
-                <p style="margin:0;font-size:13px;line-height:1.6;color:#748178;">${escapeHtml(until ? `Valid until ${until}. ` : "")}You will need a quiet place and a working microphone.</p>
+                <p style="margin:0 0 24px;"><a href="${link}" style="display:inline-block;padding:12px 22px;border:1px solid ${colors.edge};border-radius:8px;background:${accent};color:${colors.text};font-size:15px;font-weight:600;text-decoration:none;">${c.button}</a></p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#748178;">${escapeHtml(until ? c.validShort(until) : "")}${c.needs}</p>
               </td>
             </tr>
             <tr>
               <td style="padding:16px 32px;border-top:1px solid #edf1ed;font-size:12px;line-height:1.5;color:#748178;">
-                Automated message sent by Witcher on behalf of ${c}. Please do not reply to this e-mail.
+                ${c.footer(co)}
               </td>
             </tr>
           </table>

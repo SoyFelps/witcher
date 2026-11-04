@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { hashCode, randomCode, randomToken, sha256Hex, timingSafeEqual } from "./crypto.ts";
 import { buildInvitationEmail } from "./email.ts";
 import { canResend, INTERVIEW_VALID_DAYS, resendsLeft, validateCreate } from "./logic.ts";
+import { DEFAULT_LANGUAGE, normalizeLanguage } from "./language.ts";
 import { type AiProvider, stubProvider, type TranscriptLine } from "./ai.ts";
 import { createGeminiProvider } from "./gemini.ts";
 import { buildFinalEvaluation, canReevaluate } from "./evaluate.ts";
@@ -72,7 +73,7 @@ async function authorised(req: Request): Promise<boolean> {
 }
 
 const INTERVIEW_COLUMNS =
-  "id,external_id,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,link_id,status,invite_count,last_invite_at,expires_at,started_at,last_seen_at,completed_at,cancelled_at,abandoned_at,language_flag,evaluation,impression,evaluating_until,q_index,phase,questions";
+  "id,external_id,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,link_id,status,invite_count,last_invite_at,expires_at,started_at,last_seen_at,completed_at,cancelled_at,abandoned_at,language_flag,language,evaluation,impression,evaluating_until,q_index,phase,questions";
 
 // deno-lint-ignore no-explicit-any
 type Row = Record<string, any>;
@@ -82,6 +83,7 @@ function publicView(row: Row) {
     id: row.id,
     externalId: row.external_id,
     status: row.status,
+    language: normalizeLanguage(row.language) ?? DEFAULT_LANGUAGE,
     expiresAt: row.expires_at,
     inviteCount: row.invite_count,
     resendsLeft: resendsLeft(row.invite_count),
@@ -104,6 +106,7 @@ async function sendInvitation(row: Row, code: string, isResend: boolean): Promis
     code,
     expiresAt: row.expires_at,
     isResend,
+    language: normalizeLanguage(row.language) ?? DEFAULT_LANGUAGE,
   });
   const to = EMAIL_OVERRIDE_TO || row.candidate_email;
   try {
@@ -157,6 +160,7 @@ async function actionCreate(body: Record<string, unknown>) {
     brand_color: v.brandColor,
     logo_url: v.logoUrl,
     questions: v.questions,
+    language: v.language,
     code_salt: salt,
     code_hash: hash,
     expires_at: new Date(Date.now() + INTERVIEW_VALID_DAYS * 86400 * 1000).toISOString(),
@@ -276,7 +280,7 @@ async function actionReevaluate(body: Record<string, unknown>) {
     if (error) throw error;
     const final = await buildFinalEvaluation(
       provider,
-      { job: row.job_title, role: row.role_title, company: row.company_name, lines: (lines ?? []) as TranscriptLine[] },
+      { job: row.job_title, role: row.role_title, company: row.company_name, lines: (lines ?? []) as TranscriptLine[], language: normalizeLanguage(row.language) ?? DEFAULT_LANGUAGE },
       Boolean(row.language_flag),
     );
     // If the AI failed again, nothing is overwritten and no notice is sent: the client can simply ask once more later.

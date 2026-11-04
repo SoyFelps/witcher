@@ -1,4 +1,5 @@
 // Pure rules of the interviews API (validation, resend limits). No Deno or network access: tested in Node.
+import { DEFAULT_LANGUAGE, type Lang, normalizeLanguage } from "./language.ts";
 
 export const MAX_QUESTIONS = 5;
 export const MAX_RESENDS = 3;
@@ -24,6 +25,7 @@ export interface CreateInput {
   brandColor: string | null;
   logoUrl: string | null;
   questions: string[];
+  language: Lang;
 }
 
 export type Validated<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -60,6 +62,14 @@ export function validateCreate(body: Record<string, unknown>): Validated<CreateI
     }
   }
 
+  // The language of the interview (the language of the job description, chosen in Pathway). Missing means English, as before languages existed.
+  let language: Lang = DEFAULT_LANGUAGE;
+  if (body.language !== undefined && body.language !== null && body.language !== "") {
+    const parsedLanguage = normalizeLanguage(body.language);
+    if (!parsedLanguage) return { ok: false, error: "language_invalid" };
+    language = parsedLanguage;
+  }
+
   if (!Array.isArray(body.questions) || body.questions.length < 1 || body.questions.length > MAX_QUESTIONS) {
     return { ok: false, error: "questions_invalid" };
   }
@@ -68,7 +78,7 @@ export function validateCreate(body: Record<string, unknown>): Validated<CreateI
 
   return {
     ok: true,
-    value: { externalId, candidateName, candidateEmail, jobTitle, roleTitle, companyName, brandColor: rawColor || null, logoUrl, questions },
+    value: { externalId, candidateName, candidateEmail, jobTitle, roleTitle, companyName, brandColor: rawColor || null, logoUrl, questions, language },
   };
 }
 

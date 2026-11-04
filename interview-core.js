@@ -1,11 +1,13 @@
 /*
  * Pure helpers of the candidate interview page (no DOM, no network), so Node can test them.
  * In the browser they are exposed as window.WitcherCore; in Node as module.exports.
+ * The texts it returns come from interview-i18n.js (window.WitcherI18n in the browser, a require in Node), in the language of the interview.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.WitcherCore = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
+  const I18n = typeof window !== 'undefined' && window.WitcherI18n ? window.WitcherI18n : require('./interview-i18n.js');
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
   const ANSWER_SECONDS = 180;
@@ -124,46 +126,35 @@
     return secondsLeft <= WARN_SECONDS ? 'warn' : 'ok';
   }
 
-  const STATE_SCREENS = {
-    cancelled: ['This interview was cancelled', 'The hiring team cancelled this interview. If you think this is a mistake, please contact them.'],
-    expired: ['This invitation has expired', 'This interview link is no longer valid. Please ask the hiring team to send you a new invitation.'],
-    completed: ['Interview already completed', 'Thank you. Your answers were already sent to the hiring team.'],
-    abandoned: ['This interview was cancelled', 'The interview was closed after it started, so it cannot be resumed. Please contact the hiring team if you would like to try again.'],
-    in_progress: ['This interview is already open', 'This interview was already started, in another window or earlier, so it cannot be opened again. Please contact the hiring team if you need help.'],
-    unavailable: ['This link is not available', 'This interview link is not valid. Please check the link in your e-mail or ask the hiring team for a new invitation.'],
-    created: ['This link is not available', 'This interview link is not valid. Please check the link in your e-mail or ask the hiring team for a new invitation.'],
-  };
-
-  /** Title and text for a screen that ends the flow (the interview cannot continue). */
-  function stateScreen(state) {
-    const found = STATE_SCREENS[state] || STATE_SCREENS.unavailable;
+  /** Title and text for a screen that ends the flow (the interview cannot continue), in the language of the interview. */
+  function stateScreen(state, lang) {
+    const found = I18n.stateText(lang, state === 'created' ? 'unavailable' : state);
     return { title: found[0], text: found[1] };
   }
 
-  /** User-facing text for an error code from the session function. `extra` carries attemptsLeft or retryAt. */
-  function errorText(code, extra) {
+  /** User-facing text for an error code from the session function, in the language of the interview. `extra` carries attemptsLeft or retryAt. */
+  function errorText(code, extra, lang) {
     const info = extra || {};
+    const t = (key, vars) => I18n.t(lang, key, vars);
     switch (code) {
       case 'invalid_code': {
         const left = Number(info.attemptsLeft);
-        return Number.isFinite(left) && left > 0
-          ? `That code is not correct. You have ${left} ${left === 1 ? 'attempt' : 'attempts'} left.`
-          : 'That code is not correct.';
+        return Number.isFinite(left) && left > 0 ? t(left === 1 ? 'errInvalidCodeLeftOne' : 'errInvalidCodeLeftMany', { n: left }) : t('errInvalidCode');
       }
       case 'locked': {
         const at = info.retryAt ? new Date(info.retryAt) : null;
         const minutes = at && !Number.isNaN(at.getTime()) ? Math.max(1, Math.ceil((at.getTime() - (info.now || Date.now())) / 60000)) : 15;
-        return `Too many wrong codes. Please wait about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} and try again.`;
+        return t(minutes === 1 ? 'errLockedOne' : 'errLockedMany', { n: minutes });
       }
-      case 'consent_required': return 'Please accept the terms to continue.';
-      case 'time_over': return 'The time to send this answer has passed. You can skip to the next question.';
-      case 'out_of_sync': return 'Something went out of sync. Please try again.';
-      case 'ai_unavailable': return 'The AI assistant is not available right now. Please try sending your answer again in a moment.';
-      case 'ai_not_configured': return 'The AI assistant is not available right now. Please try again later.';
-      case 'no_voice': return "We couldn't hear your voice in this recording. Check that your microphone is on and not muted, then try again.";
-      case 'audio_invalid': return 'We could not use that recording. Please record your answer again.';
-      case 'network': return 'We could not reach the server. Check your connection and try again.';
-      default: return 'Something went wrong. Please try again.';
+      case 'consent_required': return t('errConsentRequired');
+      case 'time_over': return t('errTimeOver');
+      case 'out_of_sync': return t('errOutOfSync');
+      case 'ai_unavailable': return t('errAiUnavailable');
+      case 'ai_not_configured': return t('errAiNotConfigured');
+      case 'no_voice': return t('errNoVoice');
+      case 'audio_invalid': return t('errAudioInvalid');
+      case 'network': return t('errNetwork');
+      default: return t('errGeneric');
     }
   }
 

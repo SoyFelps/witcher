@@ -10,14 +10,17 @@
   const root = document.getElementById('app');
   const HEARTBEAT_MS = 15000;
   const STOP_WAIT_MS = 2500; // how long to wait for the recorder to say it stopped
-  const DISCLAIMER = "The AI does not determine who passes or fails in the selection process; it only facilitates the recruiter's role in choosing the best candidate for the position. The company is responsible for reviewing your responses.";
-  const TEST_QUESTION = 'Tell me about your career so far.';
+  const I18n = window.WitcherI18n;
 
   const S = {
-    linkId: null, branding: null, emailMasked: '', consentVersion: '', token: '', firstName: '', total: 3,
+    lang: I18n.normalize(typeof navigator !== 'undefined' ? navigator.language : 'en'), linkId: null, branding: null, emailMasked: '', consentVersion: '', token: '', firstName: '', total: 3,
     screen: 'loading', phase: 'intro', mode: 'idle', messages: [], prompt: null, deadline: 0,
     take: null, rec: null, testAsked: false, notice: '', devices: [], deviceId: '', timer: null, beat: null, started: false,
   };
+  // Every text the candidate reads comes from interview-i18n.js, in the language of the interview (the one of the job). Until the server says
+  // which one it is (the `open` answer), the page uses the browser language for its first screen, if it is one of the three.
+  const T = (key, vars) => I18n.t(S.lang, key, vars);
+  const errText = (code, extra) => errText(code, extra, S.lang);
 
   // ---------------------------------------------------------------------------------------------- server
   async function api(body) {
@@ -108,13 +111,11 @@
   };
 
   // Shown when the microphone is muted by the phone, taken by another app, or unplugged.
-  const MIC_MUTED_TEXT = 'Your microphone seems to be muted or in use by another app. Close other apps that use the microphone, then try again.';
-  const MIC_ENDED_TEXT = 'The microphone stopped working. Check that it is connected and not used by another app, then record again.';
   function onMicTrouble(kind) {
     if (S.screen !== 'chat') return;
-    if (kind === 'back') { if (S.notice === MIC_MUTED_TEXT) setNotice(''); return; }
+    if (kind === 'back') { if (S.notice === T('micMuted')) setNotice(''); return; }
     if (kind === 'ended' && S.rec && S.rec.state === 'recording') stopRecording();
-    setNotice(kind === 'ended' ? MIC_ENDED_TEXT : MIC_MUTED_TEXT);
+    setNotice(kind === 'ended' ? T('micEnded') : T('micMuted'));
   }
 
   // A generic sound wave while recording: bars rise with the voice and stay flat in silence (it is only feedback).
@@ -153,9 +154,9 @@
 
   function micErrorText(error) {
     const name = error && error.name;
-    if (name === 'NotAllowedError' || name === 'SecurityError') return "Microphone access is blocked. Allow the microphone in your browser's address bar and try again.";
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No microphone was found. Connect one and try again.';
-    return 'We could not start the microphone. Check it is not in use by another app and try again.';
+    if (name === 'NotAllowedError' || name === 'SecurityError') return T('micBlocked');
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return T('micNotFound');
+    return T('micFailed');
   }
 
   // ---------------------------------------------------------------------------------------------- layout
@@ -170,13 +171,13 @@
       : `<span class="w-mark">${initial}</span>`;
     return `<header class="w-top">
       <div class="w-top-brand">${logo}${hasLogo ? '' : `<span class="w-company">${name}</span>`}<span class="w-powered">Powered by Witcher</span></div>
-      <button class="w-help" type="button" data-action="help" aria-expanded="false">Need help?</button>
+      <button class="w-help" type="button" data-action="help" aria-expanded="false">${esc(T('needHelp'))}</button>
     </header>
-    <div class="w-help-panel" id="help" hidden>Find a quiet place, allow microphone access when the browser asks, and use a recent version of Chrome, Edge, Firefox or Safari. If something does not work, contact the hiring team that invited you.</div>`;
+    <div class="w-help-panel" id="help" hidden>${esc(T('helpText'))}</div>`;
   }
 
   function foot() {
-    return `<footer class="w-foot">Your voice is turned into text by an AI service. The audio is not stored; only the text of your answers is kept and shared with the hiring team.</footer>`;
+    return `<footer class="w-foot">${esc(T('footer'))}</footer>`;
   }
 
   function mount(html) {
@@ -193,7 +194,8 @@
       style.setProperty('--accent-soft', tokens.soft); style.setProperty('--accent-mid', tokens.mid);
       style.setProperty('--accent-line', tokens.line); style.setProperty('--accent-ink', tokens.ink);
     }
-    document.title = b && b.company ? `Interview · ${b.company}` : 'Interview · Witcher';
+    document.title = b && b.company ? T('documentTitle', { company: b.company }) : T('documentTitleDefault');
+    document.documentElement.lang = I18n.LOCALES[S.lang] || S.lang;
   }
 
   function card(title, text, extra) {
@@ -207,7 +209,7 @@
   }
 
   function showState(state) {
-    const info = Core.stateScreen(state);
+    const info = Core.stateScreen(state, S.lang);
     showMessage(info.title, info.text);
   }
 
@@ -215,13 +217,13 @@
   function showCode(error) {
     S.screen = 'code';
     mount(`<section class="w-card w-card-wide">
-      <h1>Enter your access code</h1>
-      <p>${esc(S.branding.company)} invited you to an interview for <strong>${esc(S.branding.jobTitle)}</strong>. We sent a 6-digit code to <strong>${esc(S.emailMasked)}</strong>.</p>
+      <h1>${esc(T('codeTitle'))}</h1>
+      <p>${T('codeIntroHtml', { company: esc(S.branding.company), job: esc(S.branding.jobTitle), email: esc(S.emailMasked) })}</p>
       <form id="code-form" novalidate>
-        <label class="w-label" for="code">Access code</label>
+        <label class="w-label" for="code">${esc(T('codeLabel'))}</label>
         <input class="w-input w-code" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000" aria-describedby="code-error" autofocus>
         <p class="w-error" id="code-error" role="alert">${error ? esc(error) : ''}</p>
-        <button class="w-btn" type="submit" id="code-submit">Continue</button>
+        <button class="w-btn" type="submit" id="code-submit">${esc(T('codeContinue'))}</button>
       </form>
     </section>`);
     const form = document.getElementById('code-form');
@@ -231,7 +233,7 @@
       event.preventDefault();
       const code = Core.cleanCode(input.value);
       const errorBox = document.getElementById('code-error');
-      if (code.length !== 6) { errorBox.textContent = 'Enter the 6 digits from your e-mail.'; return; }
+      if (code.length !== 6) { errorBox.textContent = T('codeShort'); return; }
       const button = document.getElementById('code-submit');
       button.disabled = true; errorBox.textContent = '';
       const result = await api({ action: 'verify', linkId: S.linkId, code });
@@ -247,7 +249,7 @@
       if (result.status === 409 && result.json.state) { showState(result.json.state); return; }
       if (result.status === 404) { showState('unavailable'); return; }
       button.disabled = false;
-      errorBox.textContent = Core.errorText(result.json.error, { ...result.json, now: Date.now() });
+      errorBox.textContent = errText(result.json.error, { ...result.json, now: Date.now() });
     });
   }
 
@@ -255,18 +257,19 @@
     S.screen = 'consent';
     const company = esc(S.branding.company);
     mount(`<section class="w-card w-card-wide">
-      <h1>Before we begin</h1>
-      <p>This is an interview with an AI assistant for <strong>${esc(S.branding.jobTitle)}</strong> at <strong>${company}</strong>.</p>
+      <h1>${esc(T('consentTitle'))}</h1>
+      <p>${T('consentIntroHtml', { job: esc(S.branding.jobTitle), company })}</p>
       <ul class="w-list">
-        <li>You will be asked ${esc(S.total)} ${S.total === 1 ? 'question' : 'questions'} and answer each one <strong>out loud</strong>, with up to <strong>3 minutes</strong> per answer. After some answers the AI asks one follow-up question.</li>
-        <li>Your voice is sent to an AI service that turns it into text. <strong>The audio is not stored.</strong> Only the text of your answers is kept and shared with ${company}.</li>
-        <li>The AI does not decide who moves forward. ${company} reviews your answers.</li>
-        <li><strong>If you leave or refresh this page after the first question, the interview is cancelled</strong> and cannot be resumed.</li>
-        <li>You will need a quiet place and a working microphone.</li>
+        <li>${T(S.total === 1 ? 'consentQuestionsOneHtml' : 'consentQuestionsManyHtml', { n: esc(S.total) })}</li>
+        <li>${T('consentVoiceHtml', { company })}</li>
+        <li>${esc(T('consentAi', { company: S.branding.company }))}</li>
+        <li>${T('consentLeaveHtml')}</li>
+        <li>${esc(T('consentNeeds'))}</li>
+        <li>${T('consentLanguageHtml', { language: esc(I18n.NAMES[S.lang]) })}</li>
       </ul>
-      <label class="w-check"><input type="checkbox" id="agree"> <span>I have read this and agree to the recording and processing of my voice described above.</span></label>
+      <label class="w-check"><input type="checkbox" id="agree"> <span>${esc(T('consentCheck'))}</span></label>
       <p class="w-error" id="consent-error" role="alert">${error ? esc(error) : ''}</p>
-      <button class="w-btn" type="button" id="consent-go" disabled>Agree and continue</button>
+      <button class="w-btn" type="button" id="consent-go" disabled>${esc(T('consentGo'))}</button>
     </section>`);
     const agree = document.getElementById('agree');
     const go = document.getElementById('consent-go');
@@ -275,18 +278,18 @@
       go.disabled = true;
       const result = await api({ action: 'consent', sessionToken: S.token, accepted: true, version: S.consentVersion });
       if (result.status === 200) { showIntro(); return; }
-      if (result.status === 401) { showMessage('Your session ended', 'For your security the session ended. Open the link in your e-mail again to continue.'); return; }
+      if (result.status === 401) { showMessage(T('sessionEndedTitle'), T('sessionEndedSecurity')); return; }
       if (result.status === 409 && result.json.state) { showState(result.json.state); return; }
       go.disabled = false;
-      document.getElementById('consent-error').textContent = Core.errorText(result.json.error);
+      document.getElementById('consent-error').textContent = errText(result.json.error);
     });
   }
 
   function chatShell() {
-    return `<h1 class="w-title">AI Interview</h1><p class="w-sub">Talk naturally just like you would in a regular interview.</p>
-    <section class="w-chat" aria-label="Interview">
+    return `<h1 class="w-title">${esc(T('chatTitle'))}</h1><p class="w-sub">${esc(T('chatSub'))}</p>
+    <section class="w-chat" aria-label="${esc(T('chatAria'))}">
       <div class="w-chat-head"><span class="w-ai-icon" aria-hidden="true">✦</span>
-        <div class="w-chat-head-text"><strong>${esc(S.branding.jobTitle)}</strong><small>Artificial Intelligence Assistant</small></div>
+        <div class="w-chat-head-text"><strong>${esc(S.branding.jobTitle)}</strong><small>${esc(T('assistant'))}</small></div>
         <span class="w-progress" id="progress"></span></div>
       <div class="w-msgs" id="msgs" aria-live="polite"></div>
       <div class="w-dock" id="dock"></div>
@@ -298,9 +301,9 @@
     mount(chatShell());
     clearInterval(S.timer);
     S.timer = setInterval(tick, 250); // the recording counter of the microphone test also needs it
-    addMessage('ai', DISCLAIMER);
-    addMessage('ai', 'Would you like to test your microphone first? Your test recording stays in your browser and is not saved or sent anywhere.');
-    document.getElementById('progress').textContent = 'Microphone check';
+    addMessage('ai', T('disclaimer'));
+    addMessage('ai', T('micOffer'));
+    document.getElementById('progress').textContent = T('micCheck');
     renderDock();
   }
 
@@ -308,8 +311,8 @@
     stopLive();
     S.screen = 'done';
     mount(`<section class="w-card w-card-wide w-done"><span class="w-done-icon" aria-hidden="true">✓</span>
-      <h1>Thank you${S.firstName ? ', ' + esc(S.firstName) : ''}!</h1>
-      <p>Your interview is complete and your answers were sent to ${esc(S.branding.company)}. They will review them and contact you if they would like to move forward. You can close this page now.</p></section>`);
+      <h1>${esc(S.firstName ? T('doneTitleName', { name: S.firstName }) : T('doneTitle'))}</h1>
+      <p>${esc(T('doneText', { company: S.branding.company }))}</p></section>`);
   }
 
   // ---------------------------------------------------------------------------------------------- chat
@@ -322,9 +325,9 @@
     const company = esc((S.branding && S.branding.company) || 'Witcher');
     const html = role === 'ai'
       ? `<div class="w-msg w-msg-ai"><span class="w-ai-icon" aria-hidden="true">✦</span><div class="w-msg-body">
-          <div class="w-msg-meta"><strong>${company}</strong> <span class="w-tag">AI</span> <span>${esc(entry.time)}</span>${extra && extra.current ? ' <span class="w-turn">' + esc(extra.turnLabel || 'Your turn to respond') + '</span>' : ''}</div>
+          <div class="w-msg-meta"><strong>${company}</strong> <span class="w-tag">${esc(T('aiTag'))}</span> <span>${esc(entry.time)}</span>${extra && extra.current ? ' <span class="w-turn">' + esc(extra.turnLabel || T('yourTurnLabel')) + '</span>' : ''}</div>
           <div class="w-bubble${extra && extra.current ? ' w-bubble-current' : ''}">${esc(text)}</div></div></div>`
-      : `<div class="w-msg w-msg-you"><div class="w-msg-meta">You · ${esc(entry.time)}</div>
+      : `<div class="w-msg w-msg-you"><div class="w-msg-meta">${esc(T('you'))} · ${esc(entry.time)}</div>
           <div class="w-audio"><span class="w-audio-icon" aria-hidden="true">🎙</span><span>${esc(text)}</span><span class="w-sent" aria-hidden="true">${extra && extra.skipped ? '' : '✓'}</span></div></div>`;
     list.insertAdjacentHTML('beforeend', html);
     list.scrollTop = list.scrollHeight;
@@ -350,48 +353,47 @@
     if (!dock) return;
     Wave.stop();
     const interview = S.phase === 'interview';
-    const name = S.firstName ? `, ${esc(S.firstName)}` : '';
     const left = S.rec && S.rec.state === 'recording' ? Core.formatClock((Date.now() - S.rec.startedAt) / 1000) : '';
-    let title = 'Microphone check';
-    let sub = 'Test it as many times as you like. Nothing is saved.';
+    let title = esc(T('micCheck'));
+    let sub = esc(T('dockCheckSub'));
     let buttons = '';
 
     if (interview) {
-      title = `Now it's your turn${name}`;
-      sub = `<span id="timer" class="w-timer">You have 3 minutes to read and answer the question</span>`;
+      title = esc(S.firstName ? T('nowYourTurnName', { name: S.firstName }) : T('nowYourTurn'));
+      sub = `<span id="timer" class="w-timer">${esc(T('timerIntro'))}</span>`;
     }
     if (S.mode === 'idle') {
       if (!interview && !S.testAsked) {
-        buttons = `<button class="w-btn w-btn-ghost" type="button" data-action="test-mic">Test my microphone</button><button class="w-btn" type="button" data-action="start">Start the interview</button>`;
-        title = 'Ready when you are'; sub = 'You can test your microphone first, or start right away.';
+        buttons = `<button class="w-btn w-btn-ghost" type="button" data-action="test-mic">${esc(T('btnTestMic'))}</button><button class="w-btn" type="button" data-action="start">${esc(T('btnStart'))}</button>`;
+        title = esc(T('readyTitle')); sub = esc(T('readySub'));
       } else {
-        buttons = `<button class="w-btn" type="button" data-action="record" id="record-btn">● Record response</button>${interview ? '' : '<button class="w-btn w-btn-ghost" type="button" data-action="start">Start the interview</button>'}`;
+        buttons = `<button class="w-btn" type="button" data-action="record" id="record-btn">${esc(T('btnRecord'))}</button>${interview ? '' : `<button class="w-btn w-btn-ghost" type="button" data-action="start">${esc(T('btnStart'))}</button>`}`;
       }
     } else if (S.mode === 'recording') {
-      sub = interview ? sub : 'Recording… speak now.';
-      buttons = `<span class="w-rec" aria-live="off"><i></i> <span id="elapsed">${left}</span></span><button class="w-btn" type="button" data-action="stop">Stop</button>`; // nothing else while recording
+      sub = interview ? sub : esc(T('recordingSub'));
+      buttons = `<span class="w-rec" aria-live="off"><i></i> <span id="elapsed">${left}</span></span><button class="w-btn" type="button" data-action="stop">${esc(T('btnStop'))}</button>`; // nothing else while recording
     } else if (S.mode === 'recorded') {
       const player = S.take ? `<audio class="w-player" controls src="${esc(S.take.url)}"></audio>` : '';
       const timeIsUp = interview && Core.secondsLeftFrom(S.deadline, Date.now()) <= 0;
       const second = timeIsUp
-        ? '<button class="w-btn w-btn-ghost" type="button" data-action="skip">Skip this question</button>'
-        : '<button class="w-btn w-btn-ghost" type="button" data-action="delete">Try again</button>';
+        ? `<button class="w-btn w-btn-ghost" type="button" data-action="skip">${esc(T('btnSkip'))}</button>`
+        : `<button class="w-btn w-btn-ghost" type="button" data-action="delete">${esc(T('btnTryAgain'))}</button>`;
       // A recording with no voice in it is never sent to the AI: it would only invent words. Try again (or skip) is offered instead.
       const silent = interview && S.take && !S.take.voiced;
       buttons = `${player}${second}${interview
-        ? (silent ? '' : '<button class="w-btn" type="button" data-action="send">Send answer</button>')
-        : '<button class="w-btn" type="button" data-action="start">Start the interview</button>'}`;
-      if (silent && !S.notice) { S.notice = Core.errorText('no_voice'); S.noticeInfo = false; }
+        ? (silent ? '' : `<button class="w-btn" type="button" data-action="send">${esc(T('btnSend'))}</button>`)
+        : `<button class="w-btn" type="button" data-action="start">${esc(T('btnStart'))}</button>`}`;
+      if (silent && !S.notice) { S.notice = errText('no_voice'); S.noticeInfo = false; }
     } else if (S.mode === 'sending') {
-      buttons = `<span class="w-wait"><i class="w-spin"></i> The AI is listening to your answer…</span>`;
+      buttons = `<span class="w-wait"><i class="w-spin"></i> ${esc(T('sending'))}</span>`;
     } else if (S.mode === 'timeup') {
-      buttons = `<button class="w-btn w-btn-ghost" type="button" data-action="skip">Skip this question</button>`;
+      buttons = `<button class="w-btn w-btn-ghost" type="button" data-action="skip">${esc(T('btnSkip'))}</button>`;
     }
 
     const picker = S.devices.length > 1
-      ? `<select class="w-select" id="mic-select" aria-label="Microphone">${S.devices.map((device, index) => `<option value="${esc(device.deviceId)}"${device.deviceId === S.deviceId ? ' selected' : ''}>${esc(device.label || `Microphone ${index + 1}`)}</option>`).join('')}</select>`
+      ? `<select class="w-select" id="mic-select" aria-label="${esc(T('micSelect'))}">${S.devices.map((device, index) => `<option value="${esc(device.deviceId)}"${device.deviceId === S.deviceId ? ' selected' : ''}>${esc(device.label || T('micN', { n: index + 1 }))}</option>`).join('')}</select>`
       : '';
-    const ready = Mic.stream ? `<span class="w-ready"><i></i> Microphone ready</span><span class="w-meter" aria-hidden="true"><i id="meter"></i></span>` : '<span class="w-ready w-ready-off"><i></i> Microphone not started yet</span>';
+    const ready = Mic.stream ? `<span class="w-ready"><i></i> ${esc(T('micReady'))}</span><span class="w-meter" aria-hidden="true"><i id="meter"></i></span>` : `<span class="w-ready w-ready-off"><i></i> ${esc(T('micNotStarted'))}</span>`;
     const wave = S.mode === 'recording' ? '<canvas class="w-wave" id="wave" aria-hidden="true"></canvas>' : '';
     dock.innerHTML = `<div class="w-dock-main"><span class="w-mic-icon" aria-hidden="true">🎙</span>
         <div class="w-dock-text"><strong>${title}</strong><span class="w-dock-sub">${sub}</span></div>${wave}
@@ -421,7 +423,7 @@
     const elapsed = document.getElementById('elapsed');
     if (elapsed && S.rec && S.rec.state === 'recording') elapsed.textContent = Core.formatClock((Date.now() - S.rec.startedAt) / 1000);
     if (S.phase === 'intro' && S.rec && S.rec.state === 'recording' && (Date.now() - S.rec.startedAt) / 1000 >= Core.TEST_MAX_SECONDS) {
-      S.notice = 'The test recording is limited to 1 minute, so it stopped.'; S.noticeInfo = true;
+      S.notice = T('testLimit'); S.noticeInfo = true;
       stopRecording();
       return;
     }
@@ -429,8 +431,8 @@
     const left = Core.secondsLeftFrom(S.deadline, Date.now());
     const label = document.getElementById('timer');
     if (label) {
-      label.textContent = left > 0 ? `Time left: ${Core.formatClock(left)}`
-        : (S.mode === 'recorded' ? 'Time is up. You can still send your answer, or skip.' : 'Time is up for this answer');
+      label.textContent = left > 0 ? T('timeLeft', { clock: Core.formatClock(left) })
+        : (S.mode === 'recorded' ? T('timeUpRecorded') : T('timeUpOver'));
       label.className = `w-timer w-timer-${Core.timerTone(left)}`;
     }
     if (left > 0) return;
@@ -448,7 +450,7 @@
       // (the thank-you screen, for example). While the last answer is being sent, a 401 only means the server just closed it.
       if (!S.started || S.screen !== 'chat') return;
       if (result.status === 401 && S.mode === 'sending') return;
-      if (result.status === 401) { showMessage('Your session ended', 'The interview can no longer continue. Please contact the hiring team.'); return; }
+      if (result.status === 401) { showMessage(T('sessionEndedTitle'), T('sessionEndedCannot')); return; }
       if (result.status === 200 && result.json.state && result.json.state !== 'in_progress') {
         if (result.json.state === 'completed') showDone(); else showState(result.json.state);
         return;
@@ -480,12 +482,12 @@
   async function openRecorder() {
     setNotice('');
     try { await Mic.open(); } catch (error) { setNotice(micErrorText(error)); renderDock(); return; }
-    if (Mic.muted) { setNotice(MIC_MUTED_TEXT); renderDock(); return; }
-    if (!window.MediaRecorder) { setNotice('This browser cannot record audio. Please use a recent version of Chrome, Edge, Firefox or Safari.'); return; }
+    if (Mic.muted) { setNotice(T('micMuted')); renderDock(); return; }
+    if (!window.MediaRecorder) { setNotice(T('noRecorder')); return; }
     const mimeType = Core.pickMimeType(type => MediaRecorder.isTypeSupported(type));
     let recorder;
     try { recorder = new MediaRecorder(Mic.stream, mimeType ? { mimeType } : undefined); }
-    catch (error) { setNotice('We could not start the recording on this device.'); return; }
+    catch (error) { setNotice(T('recordFail')); return; }
     const chunks = [];
     recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
     recorder.onerror = () => { if (S.rec && S.rec.mr === recorder && S.rec.state === 'recording') stopRecording(); };
@@ -509,7 +511,7 @@
       const seconds = Math.min(Core.ANSWER_SECONDS, Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000)));
       rec.state = 'stopped';
       clearInterval(rec.sampler);
-      if (!blob.size) { S.mode = 'idle'; setNotice(Mic.muted ? MIC_MUTED_TEXT : 'Nothing was recorded. Please try again.'); renderDock(); return; }
+      if (!blob.size) { S.mode = 'idle'; setNotice(Mic.muted ? T('micMuted') : T('nothingRecorded')); renderDock(); return; }
       S.take = { blob, url: URL.createObjectURL(blob), seconds, voiced: Core.hasVoice(Math.max(rec.peak, Mic.level)) };
       S.mode = 'recorded';
       renderDock();
@@ -547,7 +549,7 @@
     S.prompt = prompt;
     S.deadline = Date.now() + (typeof secondsLeft === 'number' ? secondsLeft : Core.ANSWER_SECONDS) * 1000;
     S.mode = 'idle'; S.take = null; S.rec = null; S.notice = ''; S.noticeInfo = false; S.skipShown = false;
-    const kind = prompt.phase === 'followup' ? 'Follow-up' : `Question ${prompt.qIndex + 1} of ${S.total}`;
+    const kind = prompt.phase === 'followup' ? T('followUp') : T('questionOf', { n: prompt.qIndex + 1, total: S.total });
     const progress = document.getElementById('progress');
     if (progress) progress.textContent = kind;
     addMessage('ai', prompt.text, { current: true });
@@ -559,7 +561,7 @@
   async function startInterview() {
     if (S.busy || S.started) return;
     S.busy = true;
-    document.querySelectorAll('[data-action="start"]').forEach(button => { button.disabled = true; button.textContent = 'Starting…'; });
+    document.querySelectorAll('[data-action="start"]').forEach(button => { button.disabled = true; button.textContent = T('starting'); });
     try { await beginInterview(); } finally { S.busy = false; }
   }
 
@@ -569,13 +571,13 @@
     if (S.take) { URL.revokeObjectURL(S.take.url); S.take = null; }
     S.rec = null;
     const result = await api({ action: 'start', sessionToken: S.token });
-    if (result.status === 401) { showMessage('Your session ended', 'For your security the session ended. Open the link in your e-mail again to continue.'); return; }
+    if (result.status === 401) { showMessage(T('sessionEndedTitle'), T('sessionEndedSecurity')); return; }
     if (result.status !== 200) {
       if (result.json.state) { showState(result.json.state); return; }
-      setNotice(Core.errorText(result.json.error)); renderDock(); return;
+      setNotice(errText(result.json.error)); renderDock(); return;
     }
     S.phase = 'interview'; S.started = true; S.total = result.json.totalQuestions || S.total;
-    addDivider('The interview starts now');
+    addDivider(T('dividerStart'));
     startTimers();
     showPrompt(result.json.prompt, result.json.secondsLeft);
   }
@@ -591,24 +593,24 @@
     if (skip) body.skip = true;
     else {
       try { body = { ...body, audio: await blobToBase64(take.blob), mimeType: take.blob.type || 'audio/webm', durationSeconds: take.seconds }; }
-      catch (error) { S.mode = previous; setNotice('We could not read the recording. Please record again.'); renderDock(); return; }
+      catch (error) { S.mode = previous; setNotice(T('readFail')); renderDock(); return; }
     }
     const result = await api(body);
     if (result.status === 200) {
-      addMessage('you', skip ? 'Question skipped' : `Audio response · ${Core.formatClock(take.seconds)}`, { skipped: !!skip });
+      addMessage('you', skip ? T('questionSkipped') : T('audioResponse', { clock: Core.formatClock(take.seconds) }), { skipped: !!skip });
       if (take) URL.revokeObjectURL(take.url);
       S.take = null; S.rec = null;
       if (result.json.done) { showDone(); return; }
       showPrompt(result.json.prompt, result.json.secondsLeft);
       return;
     }
-    if (result.status === 401) { showMessage('Your session ended', 'The interview can no longer continue. Please contact the hiring team.'); return; }
+    if (result.status === 401) { showMessage(T('sessionEndedTitle'), T('sessionEndedCannot')); return; }
     if (result.status === 409 && result.json.state) { showState(result.json.state); return; }
     // The answer stays here so the person can try again (a lost connection never loses a recording).
     S.mode = previous;
     // The server says the time is over: a recording can no longer be sent, so only skipping is left.
     if (result.json.error === 'time_over') { S.deadline = 0; S.mode = 'timeup'; if (S.take) { URL.revokeObjectURL(S.take.url); S.take = null; } }
-    setNotice(Core.errorText(result.json.error));
+    setNotice(errText(result.json.error));
     renderDock();
   }
 
@@ -623,7 +625,7 @@
       target.setAttribute('aria-expanded', String(!panel.hidden));
     } else if (action === 'test-mic') {
       S.testAsked = true;
-      addMessage('ai', TEST_QUESTION, { current: true, turnLabel: 'Microphone check' });
+      addMessage('ai', T('testQuestion'), { current: true, turnLabel: T('micCheck') });
       renderDock();
     } else if (action === 'record') startRecording();
     else if (action === 'stop') stopRecording();
@@ -650,11 +652,12 @@
   // ---------------------------------------------------------------------------------------------- start
   async function boot() {
     S.linkId = Core.parseLinkId(window.location.hash);
-    mount('<section class="w-card w-card-wide"><p>Loading your interview…</p></section>');
+    mount(`<section class="w-card w-card-wide"><p>${esc(T('loading'))}</p></section>`);
     if (!S.linkId) { showState('unavailable'); return; }
     const result = await api({ action: 'open', linkId: S.linkId });
     if (result.status === 404) { showState('unavailable'); return; }
-    if (result.status !== 200) { showMessage('We could not load the interview', Core.errorText(result.json.error)); return; }
+    if (result.status !== 200) { showMessage(T('loadFailTitle'), errText(result.json.error)); return; }
+    S.lang = I18n.normalize(result.json.language); // the language of the job decides what the whole page says
     S.branding = result.json.branding;
     S.emailMasked = result.json.emailMasked || '';
     applyBranding();

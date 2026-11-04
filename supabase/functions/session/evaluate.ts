@@ -3,8 +3,9 @@
 // each function folder; tests/functions.test.js checks the copies are identical. No Deno or network access of its own.
 import type { AiProvider, TranscriptLine } from "./ai.ts";
 import { impressionFor, tooManySkipped, withLanguageNote } from "./flow.ts";
+import { ALL_EVALUATION_FAILED_TEXTS, DEFAULT_LANGUAGE, evaluationFailedText, type Lang } from "./language.ts";
 
-export const EVALUATION_FAILED_TEXT = "The evaluation could not be generated automatically. Please review the transcript.";
+export const EVALUATION_FAILED_TEXT = evaluationFailedText("en");
 
 export interface FinalEvaluation {
   evaluation: string; // already carries the language note when it applies
@@ -14,10 +15,11 @@ export interface FinalEvaluation {
 
 export async function buildFinalEvaluation(
   provider: AiProvider | null,
-  context: { job: string; role: string | null; company: string; lines: TranscriptLine[] },
+  context: { job: string; role: string | null; company: string; lines: TranscriptLine[]; language?: Lang },
   languageFlag: boolean,
 ): Promise<FinalEvaluation> {
-  let evaluation = EVALUATION_FAILED_TEXT;
+  const lang = context.language ?? DEFAULT_LANGUAGE;
+  let evaluation = evaluationFailedText(lang);
   let aiImpression: "positive" | "mixed" | "negative" | null = null;
   let aiFailed = true;
   if (provider) {
@@ -31,7 +33,7 @@ export async function buildFinalEvaluation(
     }
   }
   const skipped = tooManySkipped(context.lines); // fixed rule, not left to the AI: more than 32% of the answers skipped = negative
-  return { evaluation: withLanguageNote(evaluation, languageFlag, skipped), impression: impressionFor(languageFlag, aiImpression, skipped), aiFailed };
+  return { evaluation: withLanguageNote(evaluation, languageFlag, skipped, lang), impression: impressionFor(languageFlag, aiImpression, skipped), aiFailed };
 }
 
 /**
@@ -41,5 +43,5 @@ export async function buildFinalEvaluation(
 export function canReevaluate(row: { status: string; evaluation: string | null; impression: string | null }): boolean {
   if (row.status !== "completed") return false;
   if (!row.evaluation) return true;
-  return row.evaluation.startsWith(EVALUATION_FAILED_TEXT) || row.impression === null;
+  return ALL_EVALUATION_FAILED_TEXTS.some((text) => row.evaluation!.startsWith(text)) || row.impression === null;
 }

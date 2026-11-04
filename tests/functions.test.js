@@ -248,7 +248,7 @@ test('the evaluation says why a negative impression came from the language rule'
   assert.match(LANGUAGE_NOTE, /automatically sets the impression to negative/);
   assert.ok(withLanguageNote('x'.repeat(9000), true).length <= 6000, 'always fits the evaluation column');
   assert.ok(withLanguageNote('x'.repeat(9000), true).endsWith(LANGUAGE_NOTE), 'the note is never cut off');
-  assert.ok(read('supabase/functions/session/evaluate.ts').includes('evaluation: withLanguageNote(evaluation, languageFlag, skipped)'));
+  assert.ok(read('supabase/functions/session/evaluate.ts').includes('evaluation: withLanguageNote(evaluation, languageFlag, skipped, lang)'));
   assert.ok(read('supabase/functions/session/index.ts').includes('buildFinalEvaluation('), 'the interview uses the shared final evaluation');
 });
 

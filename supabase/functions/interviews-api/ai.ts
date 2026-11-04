@@ -1,6 +1,8 @@
 // The AI behind the interview. Phase 2 ships only a STUB (fixed, offline answers) so the whole flow can be tested;
 // the Gemini provider replaces it in Phase 4. The audio is only ever held in memory for the duration of one call.
 
+import type { Lang } from "./language.ts";
+
 export interface AnswerContext {
   job: string;
   role: string | null;
@@ -10,6 +12,7 @@ export interface AnswerContext {
   audioBase64: string;
   mimeType: string;
   durationSeconds?: number; // as reported by the page; only used to spot a transcript that is far too long for the audio
+  language?: Lang; // the language of the interview (the one of the job); English when missing
 }
 
 export interface AnswerAnalysis {
@@ -27,6 +30,7 @@ export interface EvaluationContext {
   role: string | null;
   company: string;
   lines: TranscriptLine[];
+  language?: Lang;
 }
 
 export interface Evaluation { evaluation: string; impression: "positive" | "mixed" | "negative" }

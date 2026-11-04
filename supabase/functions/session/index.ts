@@ -4,15 +4,15 @@ import { hashCode, randomToken, sha256Hex, timingSafeEqual } from "./crypto.ts";
 import { type AiProvider, stubProvider, type TranscriptLine } from "./ai.ts";
 import { createGeminiProvider } from "./gemini.ts";
 import { buildFinalEvaluation } from "./evaluate.ts";
+import { closingText, DEFAULT_LANGUAGE, followUpFallback, type Lang, normalizeLanguage, sameLanguage } from "./language.ts";
 import {
   ABANDON_AFTER_SECONDS,
   ANSWER_SECONDS,
   answerAllowed,
   CODE_LOCK_SECONDS,
   CODE_MAX_ATTEMPTS,
-  CONSENT_VERSION,
+  consentVersionFor,
   firstName,
-  isEnglish,
   maskEmail,
   MAX_AUDIO_BASE64_CHARS,
   nextStep,
@@ -33,8 +33,6 @@ const APP_ORIGINS = new Set([
 ]);
 const MAX_BODY_BYTES = MAX_AUDIO_BASE64_CHARS + 64 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const FOLLOW_UP_FALLBACK = "Thank you. Could you tell me a bit more about that?";
-const CLOSING_TEXT = "Thank you for your time. Your answers were sent to the hiring team.";
 
 const envJsonValue = (name: string): string => {
   try {
@@ -88,8 +86,11 @@ async function readBody(req: Request): Promise<Record<string, unknown> | null> {
 // deno-lint-ignore no-explicit-any
 type Row = Record<string, any>;
 
+/** The language of this interview: the one Pathway sent (the language of the job), English for interviews made before languages existed. */
+const langOf = (row: Row): Lang => normalizeLanguage(row.language) ?? DEFAULT_LANGUAGE;
+
 const SESSION_COLUMNS =
-  "id,link_id,status,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,questions,expires_at,consent_at,q_index,phase,step_started_at,last_seen_at,session_expires_at,language_flag";
+  "id,link_id,status,candidate_name,candidate_email,job_title,role_title,company_name,brand_color,logo_url,questions,expires_at,consent_at,q_index,phase,step_started_at,last_seen_at,session_expires_at,language_flag,language";
 
 async function byLink(linkId: unknown): Promise<Row | null> {
   if (typeof linkId !== "string" || !UUID_RE.test(linkId)) return null;
@@ -155,7 +156,7 @@ async function addMessages(interviewId: string, items: { role: "ai" | "candidate
 async function actionOpen(req: Request, body: Record<string, unknown>) {
   const row = await byLink(body.linkId);
   if (!row || row.status === "created") return fail(req, 404, "unavailable");
-  return response(req, 200, { state: row.status, branding: branding(row), emailMasked: maskEmail(row.candidate_email) });
+  return response(req, 200, { state: row.status, language: langOf(row), branding: branding(row), emailMasked: maskEmail(row.candidate_email) });
 }
 
 async function actionVerify(req: Request, body: Record<string, unknown>) {
@@ -184,15 +185,15 @@ async function actionVerify(req: Request, body: Record<string, unknown>) {
   }).eq("id", row.id).eq("status", "invited");
   if (error) throw error;
   // The first name is only revealed after the right code, so a forwarded or guessed link never shows it.
-  return response(req, 200, { sessionToken: token, consentVersion: CONSENT_VERSION, totalQuestions: (row.questions as unknown[]).length, branding: branding(row), candidateFirstName: firstName(row.candidate_name) });
+  return response(req, 200, { sessionToken: token, language: langOf(row), consentVersion: consentVersionFor(langOf(row)), totalQuestions: (row.questions as unknown[]).length, branding: branding(row), candidateFirstName: firstName(row.candidate_name) });
 }
 
 async function actionConsent(req: Request, body: Record<string, unknown>) {
   const row = await bySession(body.sessionToken);
   if (!row) return fail(req, 401, "session");
   if (row.status !== "invited") return fail(req, 409, "state", { state: row.status });
-  if (body.accepted !== true || body.version !== CONSENT_VERSION) return fail(req, 400, "consent_required");
-  const { error } = await admin!.from("interviews").update({ consent_version: CONSENT_VERSION, consent_at: new Date().toISOString() }).eq("id", row.id).eq("status", "invited");
+  if (body.accepted !== true || body.version !== consentVersionFor(langOf(row))) return fail(req, 400, "consent_required");
+  const { error } = await admin!.from("interviews").update({ consent_version: consentVersionFor(langOf(row)), consent_at: new Date().toISOString() }).eq("id", row.id).eq("status", "invited");
   if (error) throw error;
   return response(req, 200, { ok: true });
 }
@@ -260,6 +261,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
         audioBase64: audio,
         mimeType,
         durationSeconds,
+        language: langOf(row),
       });
     } catch (error) {
       console.error("AI analysis failed:", error instanceof Error ? error.message : "unknown error");
@@ -269,7 +271,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
 
   const next = nextStep(position, questions.length, { skipped, onTopic: analysis.onTopic, offensive: analysis.offensive });
   const now = new Date().toISOString();
-  const languageFlag = Boolean(row.language_flag) || (!skipped && !isEnglish(analysis.language));
+  const languageFlag = Boolean(row.language_flag) || (!skipped && !sameLanguage(langOf(row), analysis.language));
 
   // Claim the step first, so a double click or a retry can never answer the same question twice.
   const update: Record<string, unknown> = { last_seen_at: now, language_flag: languageFlag };
@@ -287,7 +289,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
   }];
 
   if (next.kind === "followup") {
-    const text = (analysis.followUp || FOLLOW_UP_FALLBACK).slice(0, 500);
+    const text = (analysis.followUp || followUpFallback(langOf(row))).slice(0, 500);
     toSave.push({ role: "ai", kind: "followup", body: text });
     await addMessages(row.id, toSave);
     return response(req, 200, { prompt: { qIndex: position.qIndex, phase: "followup", text }, secondsLeft: ANSWER_SECONDS });
@@ -301,7 +303,7 @@ async function actionAnswer(req: Request, body: Record<string, unknown>) {
   // Last answer: save it and close the conversation. The evaluation is written after the response, so the candidate
   // sees the thank-you screen at once (it can take a while when Google is busy). Until it is written the
   // interview is completed with no evaluation yet.
-  toSave.push({ role: "ai", kind: "closing", body: CLOSING_TEXT });
+  toSave.push({ role: "ai", kind: "closing", body: closingText(langOf(row)) });
   await addMessages(row.id, toSave);
   const evaluation = finish(row, languageFlag).catch((error) => console.error("finish failed:", error instanceof Error ? error.message : "unknown error"));
   // deno-lint-ignore no-explicit-any
@@ -316,7 +318,7 @@ async function finish(row: Row, languageFlag: boolean) {
   if (linesError) console.error("Reading the messages failed:", linesError.message);
   const final = await buildFinalEvaluation(
     linesError ? null : aiProvider(),
-    { job: row.job_title, role: row.role_title, company: row.company_name, lines: (data ?? []) as TranscriptLine[] },
+    { job: row.job_title, role: row.role_title, company: row.company_name, lines: (data ?? []) as TranscriptLine[], language: langOf(row) },
     languageFlag,
   );
   const { error } = await admin!.from("interviews")
