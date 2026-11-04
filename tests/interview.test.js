@@ -192,3 +192,10 @@ test('light company colours keep their fill but always get an edge that stands o
   assert.match(css, /outline:2px solid var\(--accent-strong\)/);
   assert.match(fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8'), /--accent-edge/);
 });
+
+test('the tag above a question says "Microphone check" for the microphone test and "Your turn to respond" for real questions', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8');
+  assert.match(src, /esc\(extra\.turnLabel \|\| 'Your turn to respond'\)/);
+  assert.match(src, /addMessage\('ai', TEST_QUESTION, \{ current: true, turnLabel: 'Microphone check' \}\)/);
+  assert.match(src, /addMessage\('ai', prompt\.text, \{ current: true \}\)/, 'real questions keep the default tag');
+});

@@ -319,7 +319,7 @@
     const company = esc((S.branding && S.branding.company) || 'Witcher');
     const html = role === 'ai'
       ? `<div class="w-msg w-msg-ai"><span class="w-ai-icon" aria-hidden="true">✦</span><div class="w-msg-body">
-          <div class="w-msg-meta"><strong>${company}</strong> <span class="w-tag">AI</span> <span>${esc(entry.time)}</span>${extra && extra.current ? ' <span class="w-turn">Your turn to respond</span>' : ''}</div>
+          <div class="w-msg-meta"><strong>${company}</strong> <span class="w-tag">AI</span> <span>${esc(entry.time)}</span>${extra && extra.current ? ' <span class="w-turn">' + esc(extra.turnLabel || 'Your turn to respond') + '</span>' : ''}</div>
           <div class="w-bubble${extra && extra.current ? ' w-bubble-current' : ''}">${esc(text)}</div></div></div>`
       : `<div class="w-msg w-msg-you"><div class="w-msg-meta">You · ${esc(entry.time)}</div>
           <div class="w-audio"><span class="w-audio-icon" aria-hidden="true">🎙</span><span>${esc(text)}</span><span class="w-sent" aria-hidden="true">${extra && extra.skipped ? '' : '✓'}</span></div></div>`;
@@ -620,7 +620,7 @@
       target.setAttribute('aria-expanded', String(!panel.hidden));
     } else if (action === 'test-mic') {
       S.testAsked = true;
-      addMessage('ai', TEST_QUESTION, { current: true });
+      addMessage('ai', TEST_QUESTION, { current: true, turnLabel: 'Microphone check' });
       renderDock();
     } else if (action === 'record') startRecording();
     else if (action === 'stop') stopRecording();
