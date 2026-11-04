@@ -199,3 +199,9 @@ test('the tag above a question says "Microphone check" for the microphone test a
   assert.match(src, /addMessage\('ai', TEST_QUESTION, \{ current: true, turnLabel: 'Microphone check' \}\)/);
   assert.match(src, /addMessage\('ai', prompt\.text, \{ current: true \}\)/, 'real questions keep the default tag');
 });
+
+test('the header shows only the logo when the company has one, and the name only as a fallback', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'interview.js'), 'utf8');
+  assert.ok(src.includes("${logo}${hasLogo ? '' : `<span class=\"w-company\">${name}</span>`}"));
+  assert.ok(src.includes('<img class="w-logo" src="${esc(b.logoUrl)}" alt="${name}">'));
+});

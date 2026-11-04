@@ -162,11 +162,14 @@
   function header() {
     const b = S.branding;
     const initial = esc(((b && b.company) || 'W').trim().charAt(0).toUpperCase() || 'W');
-    const logo = b && b.logoUrl && /^https:\/\//.test(b.logoUrl)
-      ? `<img class="w-logo" src="${esc(b.logoUrl)}" alt="">`
+    const name = esc((b && b.company) || 'Witcher');
+    const hasLogo = Boolean(b && b.logoUrl && /^https:\/\//.test(b.logoUrl));
+    // The logo usually already carries the company name, so with a logo the name is not repeated as text (it stays as the image's alt text).
+    const logo = hasLogo
+      ? `<img class="w-logo" src="${esc(b.logoUrl)}" alt="${name}">`
       : `<span class="w-mark">${initial}</span>`;
     return `<header class="w-top">
-      <div class="w-top-brand">${logo}<span class="w-company">${esc((b && b.company) || 'Witcher')}</span><span class="w-powered">Powered by Witcher</span></div>
+      <div class="w-top-brand">${logo}${hasLogo ? '' : `<span class="w-company">${name}</span>`}<span class="w-powered">Powered by Witcher</span></div>
       <button class="w-help" type="button" data-action="help" aria-expanded="false">Need help?</button>
     </header>
     <div class="w-help-panel" id="help" hidden>Find a quiet place, allow microphone access when the browser asks, and use a recent version of Chrome, Edge, Firefox or Safari. If something does not work, contact the hiring team that invited you.</div>`;
